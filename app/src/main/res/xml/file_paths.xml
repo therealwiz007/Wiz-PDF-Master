@@ -1,0 +1,4 @@
+<paths>
+    <files-path name="docs" path="docs/" />
+    <cache-path name="share" path="share/" />
+</paths>

@@ -1,0 +1,20 @@
+<!-- 108dp adaptive canvas; artwork kept inside the 66dp safe zone (21..87). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Document sheet with folded corner -->
+    <path android:fillColor="#111114"
+        android:pathData="M39,30 L62,30 L72,40 L72,76 Q72,78 70,78 L39,78 Q37,78 37,76 L37,32 Q37,30 39,30 Z" />
+    <path android:fillColor="#FFC800" android:pathData="M62,30 L62,40 L72,40 Z" />
+    <!-- Text lines -->
+    <path android:fillColor="#FFC800" android:pathData="M43,47 L64,47 L64,50 L43,50 Z" />
+    <path android:fillColor="#FFC800" android:pathData="M43,54 L66,54 L66,57 L43,57 Z" />
+    <path android:fillColor="#FFC800" android:pathData="M43,61 L58,61 L58,64 L43,64 Z" />
+    <!-- Scanner viewfinder corners -->
+    <path android:fillColor="#111114" android:pathData="M27,27 L36,27 L36,31 L31,31 L31,36 L27,36 Z" />
+    <path android:fillColor="#111114" android:pathData="M81,27 L72,27 L72,31 L77,31 L77,36 L81,36 Z" />
+    <path android:fillColor="#111114" android:pathData="M27,81 L36,81 L36,77 L31,77 L31,72 L27,72 Z" />
+    <path android:fillColor="#111114" android:pathData="M81,81 L72,81 L72,77 L77,77 L77,72 L81,72 Z" />
+    <!-- Scan beam -->
+    <path android:fillColor="#E8111114" android:pathData="M24,68 L84,68 L84,70.5 L24,70.5 Z" />
+</vector>
