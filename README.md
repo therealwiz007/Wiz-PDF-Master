@@ -58,3 +58,8 @@ GitHub Actions: `.github/workflows/android.yml` builds the signed production APK
 
 ## Privacy
 See [privacy-policy.html](privacy-policy.html) (also bundled in the app under Settings → Privacy policy).
+
+## Store assets
+- `store-assets/`: Play icon (512), feature graphic (1024×500), 6 framed phone screenshots, logo, and **[PLAY_CONSOLE_GUIDE.md](store-assets/PLAY_CONSOLE_GUIDE.md)** (listing, content rating, Data safety answers, release steps)
+- `fastlane/metadata/android/en-US/`: title, short and full description, changelog and images in Play's standard layout
+- `tools/store-art.swift`: regenerates the icon, logo and feature graphic (`swift tools/store-art.swift icons store-assets`) and frames screenshots

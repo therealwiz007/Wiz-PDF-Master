@@ -1,0 +1,5 @@
+First release of Wiz PDF Master:
+• Document scanner with auto edge detection, auto capture and shadow removal
+• Searchable PDFs with on-device text recognition
+• Fast PDF reader with search, thumbnails and night mode
+• 100% offline — no ads, no account

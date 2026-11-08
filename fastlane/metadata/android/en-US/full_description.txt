@@ -1,0 +1,39 @@
+Wiz PDF Master turns your phone into a document scanner, a fast PDF reader and a text reader — all in one app, and everything works offline. Nothing you scan or open ever leaves your phone.
+
+SCAN DOCUMENTS
+• Live page-edge detection: point the camera and the page outline appears instantly
+• Auto capture takes the photo for you when the page is steady
+• Single or batch mode for multi-page documents, torch and tap-to-focus
+• Adjust corners precisely with a built-in magnifier
+• Perspective correction straightens tilted pages
+• Five looks: Magic (removes shadows and whitens paper), Original, Grayscale, Black & White and No Shadow
+• Rotate, reorder, delete and add pages before saving
+• Import photos from your gallery and turn them into a PDF
+• Save as A4, Letter or fit-to-image PDF
+
+MAKE SCANS SEARCHABLE (OCR)
+• Text recognition runs on your phone — no upload, no internet
+• Saved scans get an invisible text layer, so you can search them and copy text
+• Extract text from any page of any PDF and copy or share it
+
+READ ANY PDF
+• Open PDFs from your phone, WhatsApp, Gmail, Drive or any file manager
+• Smooth scrolling, pinch-zoom and double-tap zoom with sharp re-rendering
+• Search inside documents with highlighted results
+• Page thumbnails, page slider and go-to-page
+• Night reading mode for comfortable reading in the dark
+• Opens where you left off
+• Unlock password-protected PDFs (the password is never stored)
+
+ORGANISE
+• All your scans in one place with thumbnails
+• Rename, share, save to device or delete
+• Recent PDFs list for files opened from other apps
+• Search your documents by name
+
+PRIVATE BY DESIGN
+• No internet permission — the app physically cannot send your documents anywhere
+• No ads, no account, no tracking, no data collection
+• Your scans are stored privately inside the app
+
+Made by Wiz Labs.
