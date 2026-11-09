@@ -21,6 +21,7 @@
 - Smooth scrolling with pinch-zoom, double-tap zoom and fling; pages re-render sharply after zooming
 - Search with highlights and next/previous, page thumbnails, page slider, go-to-page
 - Night reading, resume where you left off, document info
+- **Add to home screen**: pin any PDF as its own launcher icon (first page on Wiz yellow) that opens it directly
 - Password-protected PDFs (unlocked on the phone; the password is never stored)
 - **Extract text** from any page: uses the PDF's own text, or OCR for scanned pages; copy or share
 
@@ -44,6 +45,12 @@ The manifest strips `INTERNET` and `ACCESS_NETWORK_STATE`, so nothing can leave 
 
 ```bash
 ~/.local/opt/gradle-8.11.1/bin/gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
+```
+
+Gesture tests (real two-finger pinch/scroll on a device or emulator):
+
+```bash
+~/.local/opt/gradle-8.11.1/bin/gradle --no-daemon :app:connectedDebugAndroidTest
 ```
 
 Release APK + AAB (signed with the Wiz keystore when `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` are set; otherwise debug-signed for local testing only):

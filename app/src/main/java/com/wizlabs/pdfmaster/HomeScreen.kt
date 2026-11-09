@@ -36,6 +36,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
+import androidx.compose.material.icons.outlined.AddToHomeScreen
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DocumentScanner
@@ -401,6 +402,10 @@ private fun DocRow(
                     MenuItem("Share", Icons.Outlined.Share) { menu = false; onShare() }
                     MenuItem("Save to device", Icons.Outlined.Save) { menu = false; onSave() }
                     MenuItem("Rename", Icons.Outlined.DriveFileRenameOutline) { menu = false; onRename() }
+                    MenuItem("Add to home screen", Icons.Outlined.AddToHomeScreen) {
+                        menu = false
+                        if (!HomeShortcuts.pin(ctx, PdfRef.Local(d.id, d.name), thumb)) toast(ctx, "Your home screen app doesn't support shortcuts")
+                    }
                     MenuItem("Delete", Icons.Outlined.Delete, WizBad) { menu = false; onDelete() }
                 }
             }

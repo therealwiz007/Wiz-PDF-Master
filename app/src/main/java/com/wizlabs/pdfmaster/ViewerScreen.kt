@@ -57,6 +57,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.AddToHomeScreen
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DarkMode
@@ -331,6 +332,17 @@ private fun ViewerContent(nav: Nav, src: PdfSource) {
                                         is PdfRef.External -> sharePdf(ctx, r.uri, r.title)
                                     }
                                 }
+                                MenuItem("Add to home screen", Icons.Outlined.AddToHomeScreen) {
+                                    menu = false
+                                    scope.launch {
+                                        val firstPage = src.renderFresh(0, 300)
+                                        val ref = when (val r = src.ref) {
+                                            is PdfRef.Local -> PdfRef.Local(r.docId, Library.doc(r.docId)?.name ?: r.title)
+                                            is PdfRef.External -> r
+                                        }
+                                        if (!HomeShortcuts.pin(ctx, ref, firstPage)) toast(ctx, "Your home screen app doesn't support shortcuts")
+                                    }
+                                }
                                 MenuItem("Document info", Icons.Outlined.Info) { menu = false; showInfo = true }
                             }
                         }
@@ -439,7 +451,7 @@ private fun SearchBar(
 
 // ---- Zoom & pan ------------------------------------------------------------------------------
 
-private class ZoomState {
+internal class ZoomState {
     var scale by mutableFloatStateOf(1f)
     var offsetX by mutableFloatStateOf(0f)
     var width = 1f
@@ -448,7 +460,7 @@ private class ZoomState {
 }
 
 @Composable
-private fun ZoomableDocument(
+internal fun ZoomableDocument(
     src: PdfSource,
     listState: LazyListState,
     zoom: ZoomState,
@@ -462,6 +474,7 @@ private fun ZoomableDocument(
     val scope = rememberCoroutineScope()
     val decay = rememberSplineBasedDecay<Float>()
     val density = LocalDensity.current
+    val flingJob = remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     BoxWithConstraints(Modifier.fillMaxSize().clipToBounds()) {
         val widthPx = constraints.maxWidth.toFloat()
@@ -486,10 +499,15 @@ private fun ZoomableDocument(
         }
         LaunchedEffect(centerPage) { onVisiblePage(centerPage) }
 
+        val topPadPx = with(density) { topPadding.toPx() }
+
         fun applyZoom(newScaleRaw: Float, centroid: Offset, pan: Offset) {
             val newScale = newScaleRaw.coerceIn(1f, 5f)
             val factor = newScale / zoom.scale
-            val dy = centroid.y / zoom.scale - centroid.y / newScale - pan.y / newScale
+            // The top gap (room for the title bar) shrinks with zoom so it never grows on screen;
+            // shift the scroll by the same amount so the point under the fingers stays put.
+            val padShift = topPadPx / zoom.scale - topPadPx / newScale
+            val dy = centroid.y / zoom.scale - centroid.y / newScale - pan.y / newScale - padShift
             zoom.offsetX = (centroid.x - (centroid.x - zoom.offsetX) * factor + pan.x)
             zoom.scale = newScale
             zoom.offsetX = zoom.clampX(zoom.offsetX)
@@ -512,19 +530,25 @@ private fun ZoomableDocument(
                     )
                 }
                 .pointerInput(src) {
+                    // One handler owns every touch on the document: one-finger scroll/pan with fling,
+                    // and two-finger pinch. The list never scrolls by itself, so a pinch can't
+                    // accidentally turn into a scroll or fling (fingers rarely land at the same time).
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        flingJob.value?.cancel()                  // touching stops a running fling
                         val tracker = VelocityTracker()
                         var panning = false
+                        var pinched = false
                         var travelled = 0f
                         do {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
                             val pressed = event.changes.filter { it.pressed }
                             if (pressed.size >= 2) {
+                                pinched = true
+                                panning = false
                                 applyZoom(zoom.scale * event.calculateZoom(), event.calculateCentroid(), event.calculatePan())
                                 event.changes.forEach { it.consume() }
-                                panning = false
-                            } else if (zoom.scale > 1.01f && pressed.size == 1) {
+                            } else if (pressed.size == 1 && !pinched) {
                                 val ch = pressed[0]
                                 val d = ch.positionChange()
                                 if (!panning) {
@@ -532,24 +556,28 @@ private fun ZoomableDocument(
                                     if (travelled > viewConfiguration.touchSlop) panning = true
                                 }
                                 if (panning) {
-                                    zoom.offsetX = zoom.clampX(zoom.offsetX + d.x)
+                                    if (zoom.scale > 1.01f) zoom.offsetX = zoom.clampX(zoom.offsetX + d.x)
                                     listState.dispatchRawDelta(-d.y / zoom.scale)
                                     tracker.addPosition(ch.uptimeMillis, ch.position)
                                     ch.consume()
                                 }
+                            } else if (pinched) {
+                                // One finger left after a pinch: ignore it until it lifts (no jump, no fling).
+                                event.changes.forEach { it.consume() }
                             }
                         } while (event.changes.any { it.pressed })
-                        if (panning) {
+                        if (panning && !pinched) {
                             val v = tracker.calculateVelocity()
-                            flingList(scope, listState, -v.y / zoom.scale, decay)
+                            flingJob.value = flingList(scope, listState, -v.y / zoom.scale, decay)
                         }
                     }
                 }
         ) {
             LazyColumn(
                 state = listState,
-                userScrollEnabled = zoom.scale <= 1.01f,
-                contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = topPadding, bottom = 120.dp),
+                userScrollEnabled = false,   // all touch scrolling is handled above
+                // Padding is divided by the zoom so the gap above the first page stays the same size on screen.
+                contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = topPadding / zoom.scale, bottom = 120.dp / zoom.scale),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxSize().graphicsLayer {
                     scaleX = zoom.scale; scaleY = zoom.scale
@@ -568,9 +596,9 @@ private fun ZoomableDocument(
     }
 }
 
-private fun flingList(scope: CoroutineScope, state: LazyListState, velocity: Float, decay: androidx.compose.animation.core.DecayAnimationSpec<Float>) {
-    if (kotlin.math.abs(velocity) < 50f) return
-    scope.launch {
+private fun flingList(scope: CoroutineScope, state: LazyListState, velocity: Float, decay: androidx.compose.animation.core.DecayAnimationSpec<Float>): kotlinx.coroutines.Job? {
+    if (kotlin.math.abs(velocity) < 50f) return null
+    return scope.launch {
         state.scroll {
             var last = 0f
             AnimationState(0f, velocity).animateDecay(decay) {

@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
+        HomeShortcuts.refFrom(intent)?.let { ref -> openFromShortcut(ref); return }
         val uri: Uri = when (intent?.action) {
             Intent.ACTION_VIEW -> intent.data
             Intent.ACTION_SEND -> {
@@ -73,6 +74,23 @@ class MainActivity : ComponentActivity() {
             else -> null
         } ?: return
         openExternal(this, nav, uri)
+    }
+
+    /** A PDF pinned to the phone's home screen was tapped. */
+    private fun openFromShortcut(ref: PdfRef) {
+        when (ref) {
+            is PdfRef.Local -> {
+                val doc = Library.doc(ref.docId)
+                if (doc == null) { toast(this, "This document was deleted"); return }
+                nav.popTo(Screen.Home)
+                nav.push(Screen.Viewer(PdfRef.Local(doc.id, doc.name)))
+            }
+            is PdfRef.External -> {
+                Library.touchRecent(this, ref.uri)
+                nav.popTo(Screen.Home)
+                nav.push(Screen.Viewer(ref))
+            }
+        }
     }
 }
 

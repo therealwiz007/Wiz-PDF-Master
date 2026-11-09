@@ -116,6 +116,7 @@ object Library {
     }
 
     fun delete(ctx: Context, id: String) {
+        HomeShortcuts.disableFor(ctx, id)
         fileOf(ctx, id).delete()
         thumbOf(ctx, id).delete()
         _docs.value = _docs.value.filter { it.id != id }
