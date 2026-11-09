@@ -454,9 +454,14 @@ private fun SearchBar(
 internal class ZoomState {
     var scale by mutableFloatStateOf(1f)
     var offsetX by mutableFloatStateOf(0f)
+    /** Extra vertical pan for the part of the zoomed view the list itself can't scroll to
+     *  (the bottom of a short document or of the last page). Always 0 at normal size. */
+    var offsetY by mutableFloatStateOf(0f)
     var width = 1f
+    var height = 1f
     fun clampX(x: Float) = x.coerceIn(width - width * scale, 0f)
-    suspend fun reset() { scale = 1f; offsetX = 0f }
+    fun clampY(y: Float, s: Float = scale) = y.coerceIn(height - height * s, 0f)
+    suspend fun reset() { scale = 1f; offsetX = 0f; offsetY = 0f }
 }
 
 @Composable
@@ -480,6 +485,7 @@ internal fun ZoomableDocument(
         val widthPx = constraints.maxWidth.toFloat()
         val heightPx = constraints.maxHeight.toFloat()
         zoom.width = widthPx
+        zoom.height = heightPx
         val side = with(density) { 10.dp.toPx() }
         val itemWidthPx = (widthPx - side * 2).coerceAtLeast(1f)
 
@@ -492,7 +498,7 @@ internal fun ZoomableDocument(
         val centerPage by remember {
             derivedStateOf {
                 val info = listState.layoutInfo
-                val layoutY = heightPx / 2f / zoom.scale
+                val layoutY = (heightPx / 2f - zoom.offsetY) / zoom.scale
                 info.visibleItemsInfo.firstOrNull { layoutY >= it.offset && layoutY < it.offset + it.size }?.index
                     ?: listState.firstVisibleItemIndex
             }
@@ -501,17 +507,41 @@ internal fun ZoomableDocument(
 
         val topPadPx = with(density) { topPadding.toPx() }
 
+        /** Scrolls the document by [delta] list px (positive = further down). The list scrolls first;
+         *  whatever it can't take (it has hit its end while zoomed) moves the zoomed view instead.
+         *  Returns how much was used. */
+        fun scrollV(delta: Float): Float {
+            var rest = delta
+            if (rest < 0f && zoom.offsetY < 0f) {               // going back up: undo the extra pan first
+                val take = maxOf(rest, zoom.offsetY / zoom.scale)
+                zoom.offsetY -= take * zoom.scale
+                rest -= take
+            }
+            if (rest != 0f) rest -= listState.dispatchRawDelta(rest)
+            if (rest > 0f) {
+                val before = zoom.offsetY
+                zoom.offsetY = zoom.clampY(before - rest * zoom.scale)
+                rest -= (before - zoom.offsetY) / zoom.scale
+            }
+            return delta - rest
+        }
+
         fun applyZoom(newScaleRaw: Float, centroid: Offset, pan: Offset) {
             val newScale = newScaleRaw.coerceIn(1f, 5f)
             val factor = newScale / zoom.scale
             // The top gap (room for the title bar) shrinks with zoom so it never grows on screen;
             // shift the scroll by the same amount so the point under the fingers stays put.
             val padShift = topPadPx / zoom.scale - topPadPx / newScale
-            val dy = centroid.y / zoom.scale - centroid.y / newScale - pan.y / newScale - padShift
+            val oy = zoom.clampY(zoom.offsetY, newScale)
+            val dy = (centroid.y - zoom.offsetY) / zoom.scale - (centroid.y + pan.y - oy) / newScale - padShift
             zoom.offsetX = (centroid.x - (centroid.x - zoom.offsetX) * factor + pan.x)
             zoom.scale = newScale
             zoom.offsetX = zoom.clampX(zoom.offsetX)
-            listState.dispatchRawDelta(dy)
+            zoom.offsetY = oy
+            // What the list can't scroll (top or end of the document) goes into the vertical pan,
+            // clamped so no empty space ever opens above the first page or below the last.
+            val left = dy - listState.dispatchRawDelta(dy)
+            if (left != 0f) zoom.offsetY = zoom.clampY(zoom.offsetY - left * newScale)
         }
 
         Box(
@@ -524,7 +554,7 @@ internal fun ZoomableDocument(
                                 val target = if (zoom.scale > 1.2f) 1f else 2.5f
                                 val anim = Animatable(zoom.scale)
                                 anim.animateTo(target, tween(260)) { applyZoom(value, pt, Offset.Zero) }
-                                if (target == 1f) zoom.offsetX = 0f
+                                if (target == 1f) { zoom.offsetX = 0f; zoom.offsetY = 0f }
                             }
                         }
                     )
@@ -557,7 +587,7 @@ internal fun ZoomableDocument(
                                 }
                                 if (panning) {
                                     if (zoom.scale > 1.01f) zoom.offsetX = zoom.clampX(zoom.offsetX + d.x)
-                                    listState.dispatchRawDelta(-d.y / zoom.scale)
+                                    scrollV(-d.y / zoom.scale)
                                     tracker.addPosition(ch.uptimeMillis, ch.position)
                                     ch.consume()
                                 }
@@ -568,7 +598,7 @@ internal fun ZoomableDocument(
                         } while (event.changes.any { it.pressed })
                         if (panning && !pinched) {
                             val v = tracker.calculateVelocity()
-                            flingJob.value = flingList(scope, listState, -v.y / zoom.scale, decay)
+                            flingJob.value = flingList(scope, -v.y / zoom.scale, decay, ::scrollV)
                         }
                     }
                 }
@@ -582,6 +612,7 @@ internal fun ZoomableDocument(
                 modifier = Modifier.fillMaxSize().graphicsLayer {
                     scaleX = zoom.scale; scaleY = zoom.scale
                     translationX = zoom.offsetX
+                    translationY = zoom.offsetY
                     transformOrigin = TransformOrigin(0f, 0f)
                 }
             ) {
@@ -596,17 +627,18 @@ internal fun ZoomableDocument(
     }
 }
 
-private fun flingList(scope: CoroutineScope, state: LazyListState, velocity: Float, decay: androidx.compose.animation.core.DecayAnimationSpec<Float>): kotlinx.coroutines.Job? {
+private fun flingList(
+    scope: CoroutineScope, velocity: Float,
+    decay: androidx.compose.animation.core.DecayAnimationSpec<Float>, scrollBy: (Float) -> Float
+): kotlinx.coroutines.Job? {
     if (kotlin.math.abs(velocity) < 50f) return null
     return scope.launch {
-        state.scroll {
-            var last = 0f
-            AnimationState(0f, velocity).animateDecay(decay) {
-                val delta = value - last
-                val consumed = scrollBy(delta)
-                last = value
-                if (kotlin.math.abs(delta - consumed) > 0.5f) cancelAnimation()
-            }
+        var last = 0f
+        AnimationState(0f, velocity).animateDecay(decay) {
+            val delta = value - last
+            val consumed = scrollBy(delta)
+            last = value
+            if (kotlin.math.abs(delta - consumed) > 0.5f) cancelAnimation()
         }
     }
 }
