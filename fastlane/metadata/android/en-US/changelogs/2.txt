@@ -1,0 +1,3 @@
+• Smoother pinch-to-zoom: no more jumping or scrolling while zooming
+• Add any PDF to your home screen as its own icon
+• Search, keyboard and scan-edge improvements
