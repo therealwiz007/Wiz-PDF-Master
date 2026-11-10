@@ -84,16 +84,18 @@ jobs:
           set -e
           VNAME=$(grep -m1 'versionName = ' app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')
           VCODE=$(grep -m1 'versionCode = ' app/build.gradle.kts | sed 's/[^0-9]//g')
-          TAG="${VNAME}-${VCODE}"
+          BASE="Wiz PDF Master (${VNAME})"
           mkdir -p dist/apk dist/aab
-          cp app/build/outputs/apk/release/app-release.apk "dist/apk/wiz-pdf-master-${TAG}.apk"
-          cp app/build/outputs/bundle/release/app-release.aab "dist/aab/wiz-pdf-master-${TAG}.aab"
-          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          cp app/build/outputs/apk/release/app-release.apk "dist/apk/${BASE}.apk"
+          cp app/build/outputs/bundle/release/app-release.aab "dist/aab/${BASE}.aab"
+          ls -l dist/apk dist/aab
+          echo "BASE=$BASE" >> "$GITHUB_ENV"
+          echo "VCODE=$VCODE" >> "$GITHUB_ENV"
 
       - name: Upload APK (install on phone)
         uses: actions/upload-artifact@v4
         with:
-          name: wiz-pdf-master-apk-${{ env.TAG }}
+          name: ${{ env.BASE }} APK
           path: dist/apk/*.apk
           if-no-files-found: error
           retention-days: 30
@@ -101,7 +103,7 @@ jobs:
       - name: Upload AAB (Play Console)
         uses: actions/upload-artifact@v4
         with:
-          name: wiz-pdf-master-aab-${{ env.TAG }}
+          name: ${{ env.BASE }} AAB
           path: dist/aab/*.aab
           if-no-files-found: error
           retention-days: 30
