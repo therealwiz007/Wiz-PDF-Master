@@ -1,0 +1,3 @@
+• Pinch works even when a finger lands on the title bar
+• After pinching, keep one finger down to move around the zoomed page
+• Zoomed pages scroll smoothly to every edge

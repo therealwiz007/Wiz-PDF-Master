@@ -247,6 +247,7 @@ private fun ViewerContent(nav: Nav, src: PdfSource) {
     var textSheet by remember { mutableStateOf<TextSheetState?>(null) }
     var visiblePage by remember { mutableIntStateOf(0) }
     val zoom = remember { ZoomState() }
+    val zoomer = rememberZoomController(listState, zoom)
 
     // Restore the last page you were reading.
     LaunchedEffect(src) {
@@ -285,7 +286,9 @@ private fun ViewerContent(nav: Nav, src: PdfSource) {
         }
     }
 
-    Box(Modifier.fillMaxSize().background(if (night) Color(0xFF050505) else Color(0xFF2A2A2E))) {
+    // Pinch and drag are handled for the whole screen, so a finger that lands on the title bar
+    // or the page slider still counts (buttons still work: a tap is never taken by it).
+    Box(Modifier.fillMaxSize().background(if (night) Color(0xFF050505) else Color(0xFF2A2A2E)).documentGestures(zoomer)) {
         ZoomableDocument(
             src = src,
             listState = listState,
@@ -295,7 +298,9 @@ private fun ViewerContent(nav: Nav, src: PdfSource) {
             currentHit = hits.getOrNull(hitIndex),
             topPadding = androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 70.dp,
             onTap = { chrome = !chrome },
-            onVisiblePage = { visiblePage = it }
+            onVisiblePage = { visiblePage = it },
+            controller = zoomer,
+            handleGestures = false
         )
 
         // ---- Top bar
@@ -464,6 +469,128 @@ internal class ZoomState {
     suspend fun reset() { scale = 1f; offsetX = 0f; offsetY = 0f }
 }
 
+/**
+ * Owns zoom, pan and scroll of the document. Its touch handler ([documentGestures]) can sit on
+ * the whole viewer, so fingers that land on the title bar still take part in a pinch.
+ */
+internal class ZoomController(
+    val listState: LazyListState,
+    val zoom: ZoomState,
+    val scope: CoroutineScope,
+    val decay: androidx.compose.animation.core.DecayAnimationSpec<Float>
+) {
+    var topPadPx = 0f
+    var flingJob: kotlinx.coroutines.Job? = null
+
+    /** Scrolls the document by [delta] list px (positive = further down). The list scrolls first;
+     *  whatever it can't take (it has hit its end while zoomed) moves the zoomed view instead.
+     *  Returns how much was used. */
+    fun scrollV(delta: Float): Float {
+        var rest = delta
+        if (rest < 0f && zoom.offsetY < 0f) {               // going back up: undo the extra pan first
+            val take = maxOf(rest, zoom.offsetY / zoom.scale)
+            zoom.offsetY -= take * zoom.scale
+            rest -= take
+        }
+        if (rest != 0f) rest -= listState.dispatchRawDelta(rest)
+        if (rest > 0f) {
+            val before = zoom.offsetY
+            zoom.offsetY = zoom.clampY(before - rest * zoom.scale)
+            rest -= (before - zoom.offsetY) / zoom.scale
+        }
+        return delta - rest
+    }
+
+    /** Moves the document with a finger: [d] is the finger movement on screen. */
+    fun panBy(d: Offset) {
+        if (zoom.scale > 1.01f) zoom.offsetX = zoom.clampX(zoom.offsetX + d.x)
+        scrollV(-d.y / zoom.scale)
+    }
+
+    fun applyZoom(newScaleRaw: Float, centroid: Offset, pan: Offset) {
+        val newScale = newScaleRaw.coerceIn(1f, 5f)
+        val factor = newScale / zoom.scale
+        // The top gap (room for the title bar) shrinks with zoom so it never grows on screen;
+        // shift the scroll by the same amount so the point under the fingers stays put.
+        val padShift = topPadPx / zoom.scale - topPadPx / newScale
+        // The spot that was under the fingers last frame (previous centroid) must land exactly
+        // under the fingers now (current centroid), so the page grows from where you pinch and
+        // follows your hand if it moves.
+        val prev = centroid - pan
+        val oy = zoom.clampY(zoom.offsetY, newScale)
+        val dy = (prev.y - zoom.offsetY) / zoom.scale - (centroid.y - oy) / newScale - padShift
+        zoom.offsetX = centroid.x - (prev.x - zoom.offsetX) * factor
+        zoom.scale = newScale
+        zoom.offsetX = zoom.clampX(zoom.offsetX)
+        zoom.offsetY = oy
+        // What the list can't scroll (top or end of the document) goes into the vertical pan,
+        // clamped so no empty space ever opens above the first page or below the last.
+        val left = dy - listState.dispatchRawDelta(dy)
+        if (left != 0f) zoom.offsetY = zoom.clampY(zoom.offsetY - left * newScale)
+    }
+
+    fun doubleTapZoom(pt: Offset) {
+        scope.launch {
+            val target = if (zoom.scale > 1.2f) 1f else 2.5f
+            val anim = Animatable(zoom.scale)
+            anim.animateTo(target, tween(260)) { applyZoom(value, pt, Offset.Zero) }
+            if (target == 1f) { zoom.offsetX = 0f; zoom.offsetY = 0f }
+        }
+    }
+}
+
+@Composable
+internal fun rememberZoomController(listState: LazyListState, zoom: ZoomState): ZoomController {
+    val scope = rememberCoroutineScope()
+    val decay = rememberSplineBasedDecay<Float>()
+    return remember(listState, zoom) { ZoomController(listState, zoom, scope, decay) }
+}
+
+/**
+ * One handler owns every scroll/zoom touch: one-finger scroll/pan with fling, and two-finger pinch.
+ * The list never scrolls by itself, so a pinch can't turn into a scroll or fling.
+ * After a pinch, the finger still down keeps moving the page (no fling, so nothing runs away).
+ */
+internal fun Modifier.documentGestures(c: ZoomController): Modifier = pointerInput(c) {
+    awaitEachGesture {
+        // Main pass: controls on top (the page slider, buttons) see the touch first. A drag they
+        // use is marked consumed and reads as no movement here, so they keep working.
+        awaitFirstDown(requireUnconsumed = false)
+        c.flingJob?.cancel()                              // touching stops a running fling
+        val tracker = VelocityTracker()
+        var panning = false
+        var pinched = false
+        var travelled = 0f
+        do {
+            val event = awaitPointerEvent()
+            val pressed = event.changes.filter { it.pressed }
+            if (pressed.size >= 2) {
+                pinched = true
+                c.applyZoom(c.zoom.scale * event.calculateZoom(), event.calculateCentroid(), event.calculatePan())
+                event.changes.forEach { it.consume() }
+            } else if (pressed.size == 1) {
+                val ch = pressed[0]
+                // A finger that was just lifted would make the remaining one look like it jumped;
+                // only count real movement of a finger that was already down.
+                val d = if (ch.previousPressed) ch.positionChange() else Offset.Zero
+                if (!panning && !pinched) {
+                    travelled += d.getDistance()
+                    if (travelled > viewConfiguration.touchSlop) panning = true
+                }
+                if (panning || pinched) {
+                    c.panBy(d)
+                    if (!pinched) tracker.addPosition(ch.uptimeMillis, ch.position)
+                    ch.consume()
+                }
+            }
+        } while (event.changes.any { it.pressed })
+        if (panning && !pinched) {
+            val v = tracker.calculateVelocity()
+            c.flingJob = flingList(c.scope, -v.y / c.zoom.scale, c.decay, c::scrollV)
+        }
+    }
+}
+
 @Composable
 internal fun ZoomableDocument(
     src: PdfSource,
@@ -474,18 +601,20 @@ internal fun ZoomableDocument(
     currentHit: Hit?,
     topPadding: androidx.compose.ui.unit.Dp,
     onTap: () -> Unit,
-    onVisiblePage: (Int) -> Unit
+    onVisiblePage: (Int) -> Unit,
+    controller: ZoomController = rememberZoomController(listState, zoom),
+    /** False when the screen puts [documentGestures] on a parent that also covers the title bar. */
+    handleGestures: Boolean = true
 ) {
-    val scope = rememberCoroutineScope()
-    val decay = rememberSplineBasedDecay<Float>()
     val density = LocalDensity.current
-    val flingJob = remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val c = controller
 
     BoxWithConstraints(Modifier.fillMaxSize().clipToBounds()) {
         val widthPx = constraints.maxWidth.toFloat()
         val heightPx = constraints.maxHeight.toFloat()
         zoom.width = widthPx
         zoom.height = heightPx
+        c.topPadPx = with(density) { topPadding.toPx() }
         val side = with(density) { 10.dp.toPx() }
         val itemWidthPx = (widthPx - side * 2).coerceAtLeast(1f)
 
@@ -505,111 +634,16 @@ internal fun ZoomableDocument(
         }
         LaunchedEffect(centerPage) { onVisiblePage(centerPage) }
 
-        val topPadPx = with(density) { topPadding.toPx() }
-
-        /** Scrolls the document by [delta] list px (positive = further down). The list scrolls first;
-         *  whatever it can't take (it has hit its end while zoomed) moves the zoomed view instead.
-         *  Returns how much was used. */
-        fun scrollV(delta: Float): Float {
-            var rest = delta
-            if (rest < 0f && zoom.offsetY < 0f) {               // going back up: undo the extra pan first
-                val take = maxOf(rest, zoom.offsetY / zoom.scale)
-                zoom.offsetY -= take * zoom.scale
-                rest -= take
-            }
-            if (rest != 0f) rest -= listState.dispatchRawDelta(rest)
-            if (rest > 0f) {
-                val before = zoom.offsetY
-                zoom.offsetY = zoom.clampY(before - rest * zoom.scale)
-                rest -= (before - zoom.offsetY) / zoom.scale
-            }
-            return delta - rest
-        }
-
-        fun applyZoom(newScaleRaw: Float, centroid: Offset, pan: Offset) {
-            val newScale = newScaleRaw.coerceIn(1f, 5f)
-            val factor = newScale / zoom.scale
-            // The top gap (room for the title bar) shrinks with zoom so it never grows on screen;
-            // shift the scroll by the same amount so the point under the fingers stays put.
-            val padShift = topPadPx / zoom.scale - topPadPx / newScale
-            // The spot that was under the fingers last frame (previous centroid) must land exactly
-            // under the fingers now (current centroid), so the page grows from where you pinch and
-            // follows your hand if it moves.
-            val prev = centroid - pan
-            val oy = zoom.clampY(zoom.offsetY, newScale)
-            val dy = (prev.y - zoom.offsetY) / zoom.scale - (centroid.y - oy) / newScale - padShift
-            zoom.offsetX = centroid.x - (prev.x - zoom.offsetX) * factor
-            zoom.scale = newScale
-            zoom.offsetX = zoom.clampX(zoom.offsetX)
-            zoom.offsetY = oy
-            // What the list can't scroll (top or end of the document) goes into the vertical pan,
-            // clamped so no empty space ever opens above the first page or below the last.
-            val left = dy - listState.dispatchRawDelta(dy)
-            if (left != 0f) zoom.offsetY = zoom.clampY(zoom.offsetY - left * newScale)
-        }
-
         Box(
             Modifier.fillMaxSize()
                 .pointerInput(src) {
-                    detectTapGestures(
-                        onTap = { onTap() },
-                        onDoubleTap = { pt ->
-                            scope.launch {
-                                val target = if (zoom.scale > 1.2f) 1f else 2.5f
-                                val anim = Animatable(zoom.scale)
-                                anim.animateTo(target, tween(260)) { applyZoom(value, pt, Offset.Zero) }
-                                if (target == 1f) { zoom.offsetX = 0f; zoom.offsetY = 0f }
-                            }
-                        }
-                    )
+                    detectTapGestures(onTap = { onTap() }, onDoubleTap = { pt -> c.doubleTapZoom(pt) })
                 }
-                .pointerInput(src) {
-                    // One handler owns every touch on the document: one-finger scroll/pan with fling,
-                    // and two-finger pinch. The list never scrolls by itself, so a pinch can't
-                    // accidentally turn into a scroll or fling (fingers rarely land at the same time).
-                    awaitEachGesture {
-                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        flingJob.value?.cancel()                  // touching stops a running fling
-                        val tracker = VelocityTracker()
-                        var panning = false
-                        var pinched = false
-                        var travelled = 0f
-                        do {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            val pressed = event.changes.filter { it.pressed }
-                            if (pressed.size >= 2) {
-                                pinched = true
-                                panning = false
-                                applyZoom(zoom.scale * event.calculateZoom(), event.calculateCentroid(), event.calculatePan())
-                                event.changes.forEach { it.consume() }
-                            } else if (pressed.size == 1 && !pinched) {
-                                val ch = pressed[0]
-                                val d = ch.positionChange()
-                                if (!panning) {
-                                    travelled += d.getDistance()
-                                    if (travelled > viewConfiguration.touchSlop) panning = true
-                                }
-                                if (panning) {
-                                    if (zoom.scale > 1.01f) zoom.offsetX = zoom.clampX(zoom.offsetX + d.x)
-                                    scrollV(-d.y / zoom.scale)
-                                    tracker.addPosition(ch.uptimeMillis, ch.position)
-                                    ch.consume()
-                                }
-                            } else if (pinched) {
-                                // One finger left after a pinch: ignore it until it lifts (no jump, no fling).
-                                event.changes.forEach { it.consume() }
-                            }
-                        } while (event.changes.any { it.pressed })
-                        if (panning && !pinched) {
-                            val v = tracker.calculateVelocity()
-                            flingJob.value = flingList(scope, -v.y / zoom.scale, decay, ::scrollV)
-                        }
-                    }
-                }
+                .then(if (handleGestures) Modifier.documentGestures(c) else Modifier)
         ) {
             LazyColumn(
                 state = listState,
-                userScrollEnabled = false,   // all touch scrolling is handled above
+                userScrollEnabled = false,   // all touch scrolling is handled by documentGestures
                 // Padding is divided by the zoom so the gap above the first page stays the same size on screen.
                 contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = topPadding / zoom.scale, bottom = 120.dp / zoom.scale),
                 verticalArrangement = Arrangement.spacedBy(10.dp),

@@ -62,7 +62,7 @@ Camera, photos and files are used only on the device, which Google does not coun
 1. Production → Create new release.
 2. Use **Play App Signing** (default). Upload `Wiz PDF Master (<versionName>).aab` from the GitHub Actions artifact **Wiz PDF Master (<versionName>) AAB** (the APK for phones, `Wiz PDF Master (<versionName>).apk`, is in the separate **… APK** artifact).
    The upload key is the shared Wiz keystore (alias `wizfueldensity`).
-3. Release name: `<versionName> (<versionCode>)`, e.g. `1.0.3 (4)`; notes from `changelogs/<versionCode>.txt`.
+3. Release name: `<versionName> (<versionCode>)`, e.g. `1.0.4 (5)`; notes from `changelogs/<versionCode>.txt`.
 4. Countries: India (and any others you want).
 5. Recommended: first roll out to **Internal testing** and install from Play on your own phone to check the camera scanner on real paper, then promote to Production.
 
