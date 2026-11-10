@@ -532,9 +532,13 @@ internal fun ZoomableDocument(
             // The top gap (room for the title bar) shrinks with zoom so it never grows on screen;
             // shift the scroll by the same amount so the point under the fingers stays put.
             val padShift = topPadPx / zoom.scale - topPadPx / newScale
+            // The spot that was under the fingers last frame (previous centroid) must land exactly
+            // under the fingers now (current centroid), so the page grows from where you pinch and
+            // follows your hand if it moves.
+            val prev = centroid - pan
             val oy = zoom.clampY(zoom.offsetY, newScale)
-            val dy = (centroid.y - zoom.offsetY) / zoom.scale - (centroid.y + pan.y - oy) / newScale - padShift
-            zoom.offsetX = (centroid.x - (centroid.x - zoom.offsetX) * factor + pan.x)
+            val dy = (prev.y - zoom.offsetY) / zoom.scale - (centroid.y - oy) / newScale - padShift
+            zoom.offsetX = centroid.x - (prev.x - zoom.offsetX) * factor
             zoom.scale = newScale
             zoom.offsetX = zoom.clampX(zoom.offsetX)
             zoom.offsetY = oy
