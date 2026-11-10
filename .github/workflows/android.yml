@@ -78,12 +78,30 @@ jobs:
           ls -lh "$APK"
           ls -lh "$AAB"
 
-      - name: Upload production APK and AAB
+      - name: Name release files with the version
+        shell: bash
+        run: |
+          set -e
+          VNAME=$(grep -m1 'versionName = ' app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')
+          VCODE=$(grep -m1 'versionCode = ' app/build.gradle.kts | sed 's/[^0-9]//g')
+          TAG="${VNAME}-${VCODE}"
+          mkdir -p dist/apk dist/aab
+          cp app/build/outputs/apk/release/app-release.apk "dist/apk/wiz-pdf-master-${TAG}.apk"
+          cp app/build/outputs/bundle/release/app-release.aab "dist/aab/wiz-pdf-master-${TAG}.aab"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+
+      - name: Upload APK (install on phone)
         uses: actions/upload-artifact@v4
         with:
-          name: wiz-pdf-master-production
-          path: |
-            app/build/outputs/apk/release/app-release.apk
-            app/build/outputs/bundle/release/app-release.aab
+          name: wiz-pdf-master-apk-${{ env.TAG }}
+          path: dist/apk/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload AAB (Play Console)
+        uses: actions/upload-artifact@v4
+        with:
+          name: wiz-pdf-master-aab-${{ env.TAG }}
+          path: dist/aab/*.aab
           if-no-files-found: error
           retention-days: 30

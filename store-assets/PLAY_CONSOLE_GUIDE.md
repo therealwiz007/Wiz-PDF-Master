@@ -60,7 +60,7 @@ Camera, photos and files are used only on the device, which Google does not coun
 
 ## 6. Release
 1. Production → Create new release.
-2. Use **Play App Signing** (default). Upload `app-release.aab` from the GitHub Actions artifact **wiz-pdf-master-production**.
+2. Use **Play App Signing** (default). Upload the `.aab` from the GitHub Actions artifact **wiz-pdf-master-aab-<versionName>-<versionCode>** (the APK for phones is in the separate **wiz-pdf-master-apk-…** artifact).
    The upload key is the shared Wiz keystore (alias `wizfueldensity`).
 3. Release name: `<versionName> (<versionCode>)`, e.g. `1.0.3 (4)`; notes from `changelogs/<versionCode>.txt`.
 4. Countries: India (and any others you want).
