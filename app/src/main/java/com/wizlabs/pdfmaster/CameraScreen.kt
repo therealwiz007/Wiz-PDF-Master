@@ -437,13 +437,14 @@ private fun StatusPill(text: String, modifier: Modifier) {
 
 @Composable
 private fun Shutter(busy: Boolean, onClick: () -> Unit) {
+    val confirm = rememberConfirm()
     Surface(
-        onClick = onClick,
+        onClick = { confirm(); onClick() },
         enabled = !busy,
         shape = CircleShape,
         color = Color.Transparent,
         border = BorderStroke(4.dp, Color.White),
-        modifier = Modifier.size(78.dp)
+        modifier = Modifier.size(78.dp).pressScale(0.88f)
     ) {
         Box(Modifier.padding(7.dp).clip(CircleShape).background(WizYellow), contentAlignment = Alignment.Center) {
             if (busy) CircularProgressIndicator(color = WizInk, strokeWidth = 3.dp, modifier = Modifier.size(28.dp))

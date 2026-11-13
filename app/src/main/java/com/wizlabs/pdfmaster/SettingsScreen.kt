@@ -52,6 +52,7 @@ fun SettingsScreen(nav: Nav) {
     var night by remember { mutableStateOf(Prefs.nightReading(ctx)) }
     var privacy by remember { mutableStateOf(false) }
     val docs by Library.docs.collectAsState()
+    val intro = rememberIntro()
     val version = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "" }
 
     Column(Modifier.fillMaxSize().background(WizBg)) {
@@ -61,7 +62,7 @@ fun SettingsScreen(nav: Nav) {
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).navigationBarsPadding()) {
             SectionHeader("Scanning")
-            Card {
+            Card(Modifier.rise(intro, 1)) {
                 Text("Default look", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -71,7 +72,7 @@ fun SettingsScreen(nav: Nav) {
                 ToggleRow("Auto capture", "Takes the photo by itself when the page is steady", auto) { auto = it; Prefs.setAutoCapture(ctx, it) }
             }
             SectionHeader("Saving")
-            Card {
+            Card(Modifier.rise(intro, 2)) {
                 ToggleRow("Make text searchable", "Run OCR on every new scan so you can search and copy text", ocr) { ocr = it; Prefs.setOcrDefault(ctx, it) }
                 Spacer(Modifier.height(14.dp))
                 Text("Page size", style = MaterialTheme.typography.titleSmall)
@@ -81,11 +82,11 @@ fun SettingsScreen(nav: Nav) {
                 }
             }
             SectionHeader("Reading")
-            Card {
+            Card(Modifier.rise(intro, 3)) {
                 ToggleRow("Night reading", "Dark pages with light text, easier on the eyes at night", night) { night = it; Prefs.setNightReading(ctx, it) }
             }
             SectionHeader("Privacy")
-            Card {
+            Card(Modifier.rise(intro, 4)) {
                 Text("Everything stays on this phone", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -94,7 +95,7 @@ fun SettingsScreen(nav: Nav) {
                     style = MaterialTheme.typography.bodySmall, color = WizMuted
                 )
                 Spacer(Modifier.height(10.dp))
-                Surface(onClick = { privacy = true }, color = WizPanelHi, contentColor = WizText, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                Surface(onClick = { privacy = true }, color = WizPanelHi, contentColor = WizText, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().pressScale(0.98f)) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("Privacy policy", modifier = Modifier.weight(1f))
                         Icon(Icons.Outlined.ChevronRight, null, tint = WizMuted)
@@ -102,7 +103,7 @@ fun SettingsScreen(nav: Nav) {
                 }
             }
             SectionHeader("About")
-            Card {
+            Card(Modifier.rise(intro, 5)) {
                 Text("Wiz PDF Master $version", style = MaterialTheme.typography.titleSmall)
                 Text("by Wiz Labs", style = MaterialTheme.typography.bodySmall, color = WizMuted)
                 Spacer(Modifier.height(8.dp))
@@ -139,8 +140,8 @@ fun SettingsScreen(nav: Nav) {
 }
 
 @Composable
-private fun Card(content: @Composable () -> Unit) {
-    Surface(color = WizPanel, shape = RoundedCornerShape(18.dp), border = BorderStroke(1.dp, WizLine), modifier = Modifier.fillMaxWidth()) {
+private fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Surface(color = WizPanel, shape = RoundedCornerShape(20.dp), border = BorderStroke(1.dp, WizLine), modifier = modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) { content() }
     }
 }

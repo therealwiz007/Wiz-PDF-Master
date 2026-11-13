@@ -279,7 +279,8 @@ private fun Tool(icon: ImageVector, label: String, enabled: Boolean = true, tint
     Surface(
         onClick = { tick(); onClick() }, enabled = enabled,
         shape = RoundedCornerShape(14.dp), color = Color.Transparent,
-        contentColor = if (enabled) tint else WizMuted.copy(alpha = .4f)
+        contentColor = if (enabled) tint else WizMuted.copy(alpha = .4f),
+        modifier = Modifier.pressScale(0.9f)
     ) {
         Column(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(icon, label, Modifier.size(24.dp))

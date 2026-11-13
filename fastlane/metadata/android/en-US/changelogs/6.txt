@@ -1,0 +1,6 @@
+• Fresh new look with an animated scanning hero
+• Smooth motion: sections glide in, buttons spring back, screens slide
+• Selected filters pop a check, new empty-state art
+• Stays light on battery: animation pauses in the background and under Battery Saver
+• Predictive back: screens shrink as you swipe back
+• Faster start and smaller download

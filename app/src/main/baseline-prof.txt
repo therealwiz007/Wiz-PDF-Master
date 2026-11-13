@@ -1,0 +1,3 @@
+# Ahead-of-time compile the app's own code on install (startup + first frames).
+HSPLcom/wizlabs/pdfmaster/**;->**(**)**
+Lcom/wizlabs/pdfmaster/**;

@@ -1,5 +1,8 @@
 package com.wizlabs.pdfmaster
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -14,7 +17,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -37,11 +41,14 @@ sealed interface Screen {
 class Nav {
     val stack = mutableStateListOf<Screen>(Screen.Home)
     val current get() = stack.last()
-    fun push(s: Screen) { stack.add(s) }
-    fun pop(): Boolean = if (stack.size > 1) { stack.removeAt(stack.lastIndex); true } else false
+    /** Direction of the last navigation, for the slide transition (true = deeper). */
+    var forward = true
+        private set
+    fun push(s: Screen) { forward = true; stack.add(s) }
+    fun pop(): Boolean = if (stack.size > 1) { forward = false; stack.removeAt(stack.lastIndex); true } else false
     /** Replace the top screen (e.g. Review -> Viewer after saving, so Back goes home). */
     fun replace(s: Screen) { if (stack.size > 1) stack[stack.lastIndex] = s else stack.add(s) }
-    fun popTo(s: Screen) { while (stack.size > 1 && stack.last() != s) stack.removeAt(stack.lastIndex) }
+    fun popTo(s: Screen) { forward = false; while (stack.size > 1 && stack.last() != s) stack.removeAt(stack.lastIndex) }
 }
 
 class MainActivity : ComponentActivity() {
@@ -55,6 +62,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) handleIntent(intent)
         setContent { WizTheme { AppRoot(nav) } }
+    }
+
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN) MotionIdle.onTouch()
+        return super.dispatchTouchEvent(ev)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -105,16 +117,29 @@ fun openExternal(ctx: Context, nav: Nav, uri: Uri) {
 
 @Composable
 fun AppRoot(nav: Nav) {
-    BackHandler(enabled = nav.stack.size > 1) { nav.pop() }
+    val peek = remember { BackPeek() }
+    // Once the back transition has played, drop the peek so the next visit starts full size.
+    LaunchedEffect(nav.current) { kotlinx.coroutines.delay(650); if (!peek.dragging) peek.reset() }
+    CompositionLocalProvider(LocalBackPeek provides peek) {
+    WizBackHandler(nav.current.toString(), enabled = nav.stack.size > 1) { nav.pop() }
     // Surface sets the default text/icon colour for every screen (otherwise plain Text is black).
     androidx.compose.material3.Surface(Modifier.fillMaxSize(), color = WizBg, contentColor = WizText) {
         AnimatedContent(
             targetState = nav.current,
             transitionSpec = {
-                (fadeIn(tween(220)) + scaleIn(tween(220), initialScale = .97f)) togetherWith fadeOut(tween(160))
+                // Slide deeper screens in from the right, back out to the right; a short fade keeps it soft.
+                if (nav.forward) {
+                    (slideInHorizontally(tween(300, easing = Emphasized)) { it / 4 } + fadeIn(tween(220))) togetherWith
+                        (slideOutHorizontally(tween(300, easing = Emphasized)) { -it / 8 } + fadeOut(tween(180)))
+                } else {
+                    (slideInHorizontally(tween(300, easing = Emphasized)) { -it / 8 } + fadeIn(tween(220))) togetherWith
+                        (slideOutHorizontally(tween(300, easing = Emphasized)) { it / 4 } + fadeOut(tween(180)))
+                }
             },
             label = "nav"
         ) { screen ->
+          // Camera preview is a SurfaceView, which ignores layer transforms: no peek there.
+          Box(if (screen == Screen.Camera) Modifier.fillMaxSize() else Modifier.fillMaxSize().backPeek(screen.toString())) {
             when (screen) {
                 Screen.Home -> HomeScreen(nav)
                 Screen.Camera -> CameraScreen(nav)
@@ -123,7 +148,9 @@ fun AppRoot(nav: Nav) {
                 is Screen.Viewer -> ViewerScreen(nav, screen.ref)
                 Screen.Settings -> SettingsScreen(nav)
             }
+          }
         }
+    }
     }
 }
 

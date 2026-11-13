@@ -12,8 +12,10 @@ android {
         applicationId = "com.wizlabs.pdfmaster"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.0.4"
+        versionCode = 6
+        versionName = "1.1.0"
+        // Ship only English resources (drops dozens of unused library translations).
+        resourceConfigurations += listOf("en")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -66,6 +68,8 @@ android {
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2025.02.00")
     implementation(composeBom)
+    // Installs bundled baseline profiles on sideloaded installs too: faster start, smoother first scrolls.
+    implementation("androidx.profileinstaller:profileinstaller:1.4.0")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.compose.ui:ui")

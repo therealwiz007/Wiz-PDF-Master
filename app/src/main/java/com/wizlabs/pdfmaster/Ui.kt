@@ -1,6 +1,15 @@
 package com.wizlabs.pdfmaster
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -129,10 +138,10 @@ fun GlassIconButton(
         onClick = { tick(); onClick() },
         enabled = enabled,
         shape = CircleShape,
+        modifier = modifier.size(size).pressScale(0.9f),
         color = bg,
         contentColor = fg,
-        border = if (active) null else BorderStroke(1.dp, Color.White.copy(alpha = .10f)),
-        modifier = modifier.size(size)
+        border = if (active) null else BorderStroke(1.dp, Color.White.copy(alpha = .10f))
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = contentDescription, modifier = Modifier.size(iconSize))
@@ -157,9 +166,19 @@ fun WizChip(
         color = bg,
         contentColor = if (selected) WizInk else WizText,
         border = if (selected) null else BorderStroke(1.dp, WizLine),
-        modifier = modifier
+        modifier = modifier.pressScale(0.94f)
     ) {
-        Row(Modifier.padding(horizontal = 14.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 9.dp).animateContentSize(spring(dampingRatio = .7f, stiffness = 700f)), verticalAlignment = Alignment.CenterVertically) {
+            AnimatedVisibility(
+                visible = selected && icon == null,
+                enter = scaleIn(spring(dampingRatio = .4f, stiffness = 600f), initialScale = .2f) + fadeIn(),
+                exit = scaleOut(tween(120)) + fadeOut(tween(120))
+            ) {
+                Row {
+                    Icon(Icons.Rounded.Check, null, Modifier.size(16.dp))
+                    Spacer(Modifier.width(5.dp))
+                }
+            }
             if (icon != null) {
                 Icon(icon, null, Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
@@ -186,7 +205,7 @@ fun ActionTile(
         color = if (primary) WizYellow else WizPanel,
         contentColor = if (primary) WizInk else WizText,
         border = if (primary) null else BorderStroke(1.dp, WizLine),
-        modifier = modifier
+        modifier = modifier.pressScale()
     ) {
         Column(Modifier.padding(16.dp)) {
             Box(

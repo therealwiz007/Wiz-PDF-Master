@@ -30,7 +30,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -110,6 +110,7 @@ fun HomeScreen(nav: Nav) {
     var deleteDoc by remember { mutableStateOf<Doc?>(null) }
     var exportDoc by remember { mutableStateOf<Doc?>(null) }
     val listState = rememberLazyListState()
+    val intro = rememberIntro()
 
     val openPdf = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) openExternal(ctx, nav, uri)
@@ -147,7 +148,7 @@ fun HomeScreen(nav: Nav) {
         ) {
             item {
                 Row(
-                    Modifier.fillMaxWidth().statusBarsPadding().padding(top = 14.dp, bottom = 6.dp),
+                    Modifier.fillMaxWidth().statusBarsPadding().padding(top = 14.dp, bottom = 6.dp).rise(intro, 0),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
@@ -166,9 +167,9 @@ fun HomeScreen(nav: Nav) {
             }
             item {
                 Spacer(Modifier.height(10.dp))
-                HeroScan { ScanSession.clear(ctx); nav.push(Screen.Camera) }
+                ScanHero(onClick = { ScanSession.clear(ctx); nav.push(Screen.Camera) }, modifier = Modifier.rise(intro, 1))
                 Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(Modifier.rise(intro, 2), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ActionTile(
                         Icons.Outlined.PhotoLibrary, "Import photos", "Gallery → PDF",
                         onClick = { pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
@@ -186,7 +187,7 @@ fun HomeScreen(nav: Nav) {
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().rise(intro, 3),
                     singleLine = true,
                     placeholder = { Text("Search documents") },
                     leadingIcon = { Icon(Icons.Outlined.Search, null) },
@@ -201,7 +202,7 @@ fun HomeScreen(nav: Nav) {
                     )
                 )
                 Spacer(Modifier.height(14.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.rise(intro, 4), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     WizChip("My scans  ${docs.size}", tab == 0, { tab = 0 })
                     WizChip("Recent PDFs  ${recents.size}", tab == 1, { tab = 1 })
                 }
@@ -209,16 +210,18 @@ fun HomeScreen(nav: Nav) {
             }
 
             if (tab == 0) {
-                if (shownDocs.isEmpty()) item {
+                if (shownDocs.isEmpty()) item(key = "empty-docs") {
                     EmptyState(
+                        Modifier.rise(intro, 5),
                         Icons.Outlined.DocumentScanner,
                         if (q.isEmpty()) "No scans yet" else "Nothing matches “$q”",
                         if (q.isEmpty()) "Tap Scan document to turn paper into a crisp, searchable PDF." else "Try a different name."
                     )
                 }
-                items(shownDocs, key = { it.id }) { d ->
+                itemsIndexed(shownDocs, key = { _, it -> it.id }) { i, d ->
                     DocRow(
                         d,
+                        modifier = Modifier.animateItem().rise(intro, 5 + i),
                         onOpen = { nav.push(Screen.Viewer(PdfRef.Local(d.id, d.name))) },
                         onShare = { sharePdf(ctx, shareUriFor(ctx, d), d.name) },
                         onRename = { renameDoc = d },
@@ -227,16 +230,18 @@ fun HomeScreen(nav: Nav) {
                     )
                 }
             } else {
-                if (shownRecents.isEmpty()) item {
+                if (shownRecents.isEmpty()) item(key = "empty-recents") {
                     EmptyState(
+                        Modifier.rise(intro, 5),
                         Icons.Outlined.FolderOpen,
                         if (q.isEmpty()) "No recent PDFs" else "Nothing matches “$q”",
                         "PDFs you open from your phone, WhatsApp or e-mail show up here."
                     )
                 }
-                items(shownRecents, key = { it.uri }) { r ->
+                itemsIndexed(shownRecents, key = { _, it -> it.uri }) { i, r ->
                     RecentRow(
                         r,
+                        modifier = Modifier.animateItem().rise(intro, 5 + i),
                         onOpen = {
                             val uri = Uri.parse(r.uri)
                             Library.touchRecent(ctx, uri)
@@ -255,6 +260,7 @@ fun HomeScreen(nav: Nav) {
         ) {
             ExtendedFloatingActionButton(
                 onClick = { ScanSession.clear(ctx); nav.push(Screen.Camera) },
+                modifier = Modifier.pressScale(),
                 containerColor = WizYellow, contentColor = WizInk,
                 icon = { Icon(Icons.Outlined.DocumentScanner, null) },
                 text = { Text("Scan", fontWeight = FontWeight.Bold) }
@@ -312,43 +318,17 @@ fun HomeScreen(nav: Nav) {
 }
 
 @Composable
-private fun HeroScan(onClick: () -> Unit) {
-    val tick = rememberTick()
-    Surface(
-        onClick = { tick(); onClick() },
-        shape = RoundedCornerShape(26.dp),
-        color = WizYellow,
-        contentColor = WizInk,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Scan document", style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "Auto edge detection, shadow removal and text recognition",
-                    style = MaterialTheme.typography.bodyMedium, color = WizInk.copy(alpha = .72f)
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Box(
-                Modifier.size(64.dp).clip(RoundedCornerShape(20.dp)).background(WizInk),
-                contentAlignment = Alignment.Center
-            ) { Icon(Icons.Outlined.DocumentScanner, null, tint = WizYellow, modifier = Modifier.size(34.dp)) }
-        }
-    }
-}
-
-@Composable
-private fun EmptyState(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, body: String) {
+private fun EmptyState(modifier: Modifier, icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, body: String) {
     Column(
-        Modifier.fillMaxWidth().padding(vertical = 36.dp, horizontal = 24.dp),
+        modifier.fillMaxWidth().padding(vertical = 28.dp, horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            Modifier.size(72.dp).clip(RoundedCornerShape(22.dp)).background(WizPanel),
-            contentAlignment = Alignment.Center
-        ) { Icon(icon, null, tint = WizYellow, modifier = Modifier.size(34.dp)) }
+        Box(Modifier.size(width = 128.dp, height = 112.dp).emptyPagesArt(), contentAlignment = Alignment.BottomEnd) {
+            Box(
+                Modifier.padding(end = 18.dp, bottom = 6.dp).size(34.dp).clip(RoundedCornerShape(11.dp)).background(WizYellow),
+                contentAlignment = Alignment.Center
+            ) { Icon(icon, null, tint = WizInk, modifier = Modifier.size(19.dp)) }
+        }
         Spacer(Modifier.height(14.dp))
         Text(title, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(4.dp))
@@ -359,6 +339,7 @@ private fun EmptyState(icon: androidx.compose.ui.graphics.vector.ImageVector, ti
 @Composable
 private fun DocRow(
     d: Doc,
+    modifier: Modifier,
     onOpen: () -> Unit,
     onShare: () -> Unit,
     onRename: () -> Unit,
@@ -375,7 +356,7 @@ private fun DocRow(
         shape = RoundedCornerShape(18.dp),
         color = WizPanel,
         border = BorderStroke(1.dp, WizLine),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp)
+        modifier = modifier.fillMaxWidth().padding(vertical = 5.dp).pressScale(0.98f)
     ) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Thumb(thumb)
@@ -414,7 +395,7 @@ private fun DocRow(
 }
 
 @Composable
-private fun RecentRow(r: Recent, onOpen: () -> Unit, onRemove: () -> Unit) {
+private fun RecentRow(r: Recent, modifier: Modifier, onOpen: () -> Unit, onRemove: () -> Unit) {
     val ctx = LocalContext.current
     val thumb by produceState<Bitmap?>(null, r.uri) {
         value = withContext(Dispatchers.IO) { recentThumb(ctx, r.uri) }
@@ -424,7 +405,7 @@ private fun RecentRow(r: Recent, onOpen: () -> Unit, onRemove: () -> Unit) {
         shape = RoundedCornerShape(18.dp),
         color = WizPanel,
         border = BorderStroke(1.dp, WizLine),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp)
+        modifier = modifier.fillMaxWidth().padding(vertical = 5.dp).pressScale(0.98f)
     ) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Thumb(thumb, Icons.Outlined.PictureAsPdf)
