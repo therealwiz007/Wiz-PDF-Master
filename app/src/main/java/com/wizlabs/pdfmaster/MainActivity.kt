@@ -34,7 +34,7 @@ sealed interface Screen {
     data object Camera : Screen
     data object Review : Screen
     data class Crop(val index: Int) : Screen
-    data class Viewer(val ref: PdfRef) : Screen
+    data class Viewer(val ref: PdfRef, val sign: Boolean = false) : Screen
     data object Settings : Screen
 }
 
@@ -106,13 +106,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-fun openExternal(ctx: Context, nav: Nav, uri: Uri) {
+fun openExternal(ctx: Context, nav: Nav, uri: Uri, sign: Boolean = false) {
     runCatching {
         ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     val (name, _) = queryNameSize(ctx, uri)
     Library.touchRecent(ctx, uri)
-    nav.push(Screen.Viewer(PdfRef.External(uri, name.removeSuffix(".pdf").removeSuffix(".PDF"))))
+    nav.push(Screen.Viewer(PdfRef.External(uri, name.removeSuffix(".pdf").removeSuffix(".PDF")), sign))
 }
 
 @Composable
@@ -145,7 +145,7 @@ fun AppRoot(nav: Nav) {
                 Screen.Camera -> CameraScreen(nav)
                 Screen.Review -> ReviewScreen(nav)
                 is Screen.Crop -> CropScreen(nav, screen.index)
-                is Screen.Viewer -> ViewerScreen(nav, screen.ref)
+                is Screen.Viewer -> ViewerScreen(nav, screen.ref, screen.sign)
                 Screen.Settings -> SettingsScreen(nav)
             }
           }

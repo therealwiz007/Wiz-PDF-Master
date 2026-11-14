@@ -105,7 +105,7 @@ func icons(_ out: String) {
     save(canvas(1600, 480) { w, h in
         drawTile(rect(40, 40, 400, 400), corner: 92)
         text("Wiz PDF Master", 500, 110, size: 150, weight: .heavy, color: ink)
-        text("SCAN · READ · SEARCH", 506, 300, size: 58, weight: .bold, color: NSColor(white: 0.25, alpha: 1), kern: 4)
+        text("SCAN · SIGN · READ", 506, 300, size: 58, weight: .bold, color: NSColor(white: 0.25, alpha: 1), kern: 4)
     }, out + "/logo-1600x480.png", opaque: false)
 
     // Feature graphic 1024x500 (same composition as Wiz Dip Charts, in black & yellow).
@@ -122,8 +122,8 @@ func icons(_ out: String) {
         glow.draw(fromCenter: NSPoint(x: 190, y: 250), radius: 0, toCenter: NSPoint(x: 190, y: 250), radius: 230, options: [])
         drawTile(rect(62, 122, 256, 256), corner: 58)
         text("Wiz PDF Master", 360, 120, size: 64, weight: .heavy, color: .white)
-        text("SCAN · READ · SEARCH", 362, 210, size: 27, weight: .bold, color: yellow, kern: 2)
-        text("Document scanner, PDF reader and text recognition", 362, 262, size: 23, weight: .regular, color: NSColor(white: 0.92, alpha: 1))
+        text("SCAN · SIGN · READ", 362, 210, size: 27, weight: .bold, color: yellow, kern: 2)
+        text("Scanner, PDF signature, reader and OCR", 362, 262, size: 23, weight: .regular, color: NSColor(white: 0.92, alpha: 1))
         text("100% offline  •  No ads  •  No account", 362, 298, size: 23, weight: .regular, color: NSColor(white: 0.92, alpha: 1))
         let pill = NSBezierPath(roundedRect: rect(362, 358, 230, 52), xRadius: 26, yRadius: 26)
         yellow.setFill(); pill.fill()

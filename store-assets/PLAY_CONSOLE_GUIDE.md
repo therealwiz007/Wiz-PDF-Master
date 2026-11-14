@@ -5,13 +5,13 @@ Everything needed to publish, in the order Play Console asks for it.
 ## 1. App details
 | Field | Value |
 |---|---|
-| App name | Wiz PDF Master: Scan & Read |
+| App name | Wiz PDF Master: Scan & Sign |
 | Package | `com.wizlabs.pdfmaster` |
 | Default language | English (United States) — en-US |
 | App or game | App |
 | Free or paid | Free |
 | Category | Productivity |
-| Tags (pick up to 5) | Document scanner, PDF reader, Productivity, Office, Tools |
+| Tags (pick up to 5) | Document scanner, PDF reader, PDF editor, Office, Productivity |
 | Contact email | *your Wiz Labs support email* |
 | Privacy policy URL | https://therealwiz007.github.io/Wiz-PDF-Master/privacy-policy.html |
 
@@ -25,10 +25,10 @@ Everything needed to publish, in the order Play Console asks for it.
 |---|---|---|
 | App icon | `icon-512.png` | 512×512 PNG, no transparency ✓ |
 | Feature graphic | `feature-graphic-1024x500.png` | 1024×500 PNG/JPG ✓ |
-| Phone screenshots (6) | `screenshots/01-home.png` … `06-privacy.png` | 2–8 images, 9:16, 1080×1920 ✓ |
+| Phone screenshots (8) | `screenshots/01-home.png` … `08-privacy.png` | 2–8 images, 9:16, 1080×1920 ✓ |
 | Logo (website/docs) | `logo-1600x480.png` | not uploaded to Play |
 
-Upload screenshots in this order: Home → Edges → Scan → Search → OCR → Privacy.
+Upload screenshots in this order: Home → Sign → Signature → Scan → Search → OCR → Signed → Privacy (8, the Play maximum; signing first because it is the 1.2.0 headline).
 Tablet screenshots are optional; skip them.
 
 ## 4. App content (Policy → App content)

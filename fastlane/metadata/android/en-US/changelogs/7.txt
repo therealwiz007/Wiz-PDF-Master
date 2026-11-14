@@ -1,0 +1,7 @@
+New: Sign PDFs
+• Photograph your signature on paper or pick an image: the background is removed automatically
+• Ink colour: black, blue, red, original or any colour you like
+• Drag, resize and rotate it on any page, or add it to all pages in one tap
+• Your signatures are saved for next time
+• The signed copy keeps its text sharp and searchable, and the original is never changed
+• Works fully offline, like everything else

@@ -1,39 +1,57 @@
-Wiz PDF Master turns your phone into a document scanner, a fast PDF reader and a text reader — all in one app, and everything works offline. Nothing you scan or open ever leaves your phone.
+Wiz PDF Master is a PDF scanner, PDF signer and PDF reader in one app. Scan documents to PDF, sign PDF files with your own handwritten signature, read and search any PDF, and copy text with OCR. Everything works offline: nothing you scan, sign or open ever leaves your phone.
 
-SCAN DOCUMENTS
+✍️ SIGN PDF DOCUMENTS (NEW)
+• Add your real handwritten signature to any PDF: contracts, rental agreements, invoices, forms, offer letters, NDAs
+• Sign on white paper, take a photo or choose a JPG / PNG, and the paper background is removed automatically
+• A clean, transparent signature with smooth edges, even from photos with shadows
+• Change the ink colour: black, blue, red, the original colour, or any custom colour
+• Drag, resize and rotate your signature anywhere on the page
+• Sign every page in one tap: "All pages" puts the same signature in the same place and size on each page
+• Save several signatures (full signature, initials) and reuse them any time
+• The signed PDF keeps its original text sharp and searchable, and the original file is never changed
+• Share the signed PDF to WhatsApp or Gmail, or save it to your phone
+• Works with PDFs from your files, WhatsApp, Gmail and Drive, including password-protected PDFs
+
+📄 DOCUMENT SCANNER: SCAN TO PDF
 • Live page-edge detection: point the camera and the page outline appears instantly
-• Auto capture takes the photo for you when the page is steady
-• Single or batch mode for multi-page documents, torch and tap-to-focus
-• Adjust corners precisely with a built-in magnifier
+• Auto capture takes the photo when the page is steady
+• Batch mode for multi-page documents, torch and tap-to-focus
+• Adjust the corners precisely with a built-in magnifier
 • Perspective correction straightens tilted pages
-• Five looks: Magic (removes shadows and whitens paper), Original, Grayscale, Black & White and No Shadow
+• Five looks: Magic (removes shadows and whitens the paper), Original, Grayscale, Black & White, No Shadow
 • Rotate, reorder, delete and add pages before saving
-• Import photos from your gallery and turn them into a PDF
-• Save as A4, Letter or fit-to-image PDF
+• Turn gallery photos into a PDF
+• Save as an A4, Letter or fit-to-image PDF
 
-MAKE SCANS SEARCHABLE (OCR)
-• Text recognition runs on your phone — no upload, no internet
-• Saved scans get an invisible text layer, so you can search them and copy text
-• Extract text from any page of any PDF and copy or share it
+🔍 OCR: TEXT RECOGNITION
+• Text recognition runs on your phone, with no upload and no internet
+• Scanned PDFs become searchable with an invisible text layer
+• Extract text from any page of any PDF, then copy or share it
 
-READ ANY PDF
-• Open PDFs from your phone, WhatsApp, Gmail, Drive or any file manager
+📖 PDF READER AND VIEWER
+• Open any PDF from your phone, WhatsApp, Gmail, Drive or a file manager
 • Smooth scrolling, pinch-zoom and double-tap zoom with sharp re-rendering
-• Search inside documents with highlighted results
+• Search inside PDFs with highlighted results
 • Page thumbnails, page slider and go-to-page
-• Night reading mode for comfortable reading in the dark
+• Night reading mode
 • Opens where you left off
 • Unlock password-protected PDFs (the password is never stored)
+• Pin any PDF to your home screen
 
-ORGANISE
-• All your scans in one place with thumbnails
+🗂 ORGANISE
+• All your scans and signed documents in one place, with thumbnails
 • Rename, share, save to device or delete
-• Recent PDFs list for files opened from other apps
+• A list of recent PDFs opened from other apps
 • Search your documents by name
 
-PRIVATE BY DESIGN
-• No internet permission — the app physically cannot send your documents anywhere
-• No ads, no account, no tracking, no data collection
-• Your scans are stored privately inside the app
+🔒 PRIVATE BY DESIGN
+• No internet permission: the app cannot send your documents or signatures anywhere
+• No ads, no account, no sign-up, no subscription, no watermark
+• No tracking and no data collection
+• Your signatures and documents are stored privately inside the app
+
+Wiz PDF Master is a free PDF scanner and electronic signature app for students, freelancers, small businesses, landlords and tenants, and anyone who needs to scan and sign documents on the go.
+
+Note: Wiz PDF Master adds a visual handwritten signature (an image of your signature). It does not create certificate-based digital signatures.
 
 Made by Wiz Labs.

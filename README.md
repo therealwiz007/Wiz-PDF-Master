@@ -1,6 +1,6 @@
 # Wiz PDF Master
 
-**Scan · Read · Search — 100% offline.** A Wiz Labs app that combines a document scanner, a fast PDF reader and on-device text recognition (OCR) in one app. No internet permission, no accounts, no ads.
+**Scan · Sign · Read — 100% offline.** A Wiz Labs app that combines a document scanner, a PDF signer, a fast PDF reader and on-device text recognition (OCR) in one app. No internet permission, no accounts, no ads.
 
 - Package: `com.wizlabs.pdfmaster` · Launcher name: **PDF Master** · min Android 8.0 (API 26), target API 36
 - Kotlin + Jetpack Compose, Wiz black-and-yellow look
@@ -25,6 +25,13 @@
 - Password-protected PDFs (unlocked on the phone; the password is never stored)
 - **Extract text** from any page: uses the PDF's own text, or OCR for scanned pages; copy or share
 
+**Sign**
+- Sign any PDF with your handwritten signature: photograph it on white paper or import a JPG/PNG; the paper is removed on-device (OpenCV: shadow flattening, Otsu threshold with a soft edge, speck and border clean-up)
+- Ink colour: black, blue, red, original or a custom hue; a "clean-up" slider for faint pens or shadows
+- Drag, resize and rotate on the page (pinch or the corner handle, snaps to right angles); copy to one page or to **all pages** at the same place and real size
+- Signatures are saved privately (`filesDir/signatures`) for reuse
+- Saves a new "(signed)" copy: the signature is stamped as a transparent image onto the original pages (PDFBox), so text stays vector and searchable; the original is never modified. Password-protected PDFs stay protected with the same password; PDFs whose author disabled editing are refused
+
 **Library**
 - My scans (private storage) with thumbnails, rename, share, save to device, delete
 - Recent PDFs opened from elsewhere, with first-page thumbnails
@@ -34,7 +41,8 @@
 | Job | Library | Licence |
 |---|---|---|
 | Edge detection, warp, filters | OpenCV 4.10 | Apache 2.0 |
-| Writing PDFs, text extraction, decryption | PDFBox-Android 2.0.27 | Apache 2.0 |
+| Writing PDFs, text extraction, decryption, signature stamping | PDFBox-Android 2.0.27 | Apache 2.0 |
+| Signature background removal | OpenCV 4.10 | Apache 2.0 |
 | Text recognition | Google ML Kit Text Recognition (bundled Latin model) | ML Kit terms |
 | Page rendering | Android `PdfRenderer` | — |
 | Camera | AndroidX CameraX 1.4 | Apache 2.0 |

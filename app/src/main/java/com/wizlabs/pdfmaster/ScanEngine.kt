@@ -249,6 +249,17 @@ object ScanEngine {
         return out
     }
 
+    /** Background estimate of one channel (paper brightness incl. shadows), same size as [c]. */
+    internal fun backgroundOf(c: Mat, dilateK: Int = 5, dilateIter: Int = 1): Mat {
+        val small = Mat(); Imgproc.resize(c, small, Size(), 0.25, 0.25, Imgproc.INTER_AREA)
+        val k = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(dilateK.toDouble(), dilateK.toDouble()))
+        Imgproc.dilate(small, small, k, Point(-1.0, -1.0), dilateIter); k.release()
+        val ks = (max(small.cols(), small.rows()) / 30).let { if (it % 2 == 0) it + 1 else it }.coerceIn(5, 51)
+        Imgproc.medianBlur(small, small, ks)
+        val bg = Mat(); Imgproc.resize(small, bg, c.size(), 0.0, 0.0, Imgproc.INTER_LINEAR); small.release()
+        return bg
+    }
+
     private fun flattenChannel(c: Mat): Mat {
         // Work on a downscaled copy for the background estimate: much faster, same result.
         val scale = 0.25

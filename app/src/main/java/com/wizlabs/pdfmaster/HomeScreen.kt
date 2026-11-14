@@ -42,6 +42,8 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.FileOpen
+import androidx.compose.material.icons.outlined.Draw
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -115,6 +117,9 @@ fun HomeScreen(nav: Nav) {
     val openPdf = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) openExternal(ctx, nav, uri)
     }
+    val openPdfToSign = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) openExternal(ctx, nav, uri, sign = true)
+    }
     val saveTo = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
         val d = exportDoc
         if (uri != null && d != null) {
@@ -158,7 +163,7 @@ fun HomeScreen(nav: Nav) {
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text("Wiz PDF Master", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Text("Scan · Read · Search  —  100% offline", style = MaterialTheme.typography.bodySmall, color = WizMuted)
+                        Text("Scan · Read · Sign  —  100% offline", style = MaterialTheme.typography.bodySmall, color = WizMuted)
                     }
                     IconButton(onClick = { nav.push(Screen.Settings) }) {
                         Icon(Icons.Outlined.Settings, "Settings", tint = WizText)
@@ -181,6 +186,8 @@ fun HomeScreen(nav: Nav) {
                         modifier = Modifier.weight(1f)
                     )
                 }
+                Spacer(Modifier.height(12.dp))
+                SignTile(onClick = { openPdfToSign.launch(arrayOf("application/pdf")) }, modifier = Modifier.rise(intro, 2))
             }
             item {
                 Spacer(Modifier.height(18.dp))
@@ -487,3 +494,29 @@ suspend fun importImages(ctx: Context, uris: List<Uri>, onProgress: (Int) -> Uni
     }
 }
 
+
+/** Slim full-width "Sign a PDF" row under the main tiles. */
+@Composable
+private fun SignTile(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val tick = rememberTick()
+    Surface(
+        onClick = { tick(); onClick() },
+        shape = RoundedCornerShape(18.dp),
+        color = WizPanel,
+        border = androidx.compose.foundation.BorderStroke(1.dp, WizLine),
+        modifier = modifier.fillMaxWidth().pressScale()
+    ) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(WizYellow.copy(alpha = .14f)),
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.Outlined.Draw, null, tint = WizYellow, modifier = Modifier.size(20.dp)) }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Sign a PDF", style = MaterialTheme.typography.titleSmall)
+                Text("Add your handwritten signature", style = MaterialTheme.typography.bodySmall, color = WizMuted)
+            }
+            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, tint = WizMuted)
+        }
+    }
+}

@@ -49,7 +49,7 @@ class PdfSource private constructor(
     val ref: PdfRef,
     private val pfd: ParcelFileDescriptor,
     private val renderer: PdfRenderer,
-    private val password: String?
+    internal val password: String?
 ) {
     val pageCount = renderer.pageCount
     /** Width / height of each page in PDF points. */
@@ -203,7 +203,7 @@ class PdfSource private constructor(
         return out
     }
 
-    private fun openStream() = when (ref) {
+    internal fun openStream() = when (ref) {
         is PdfRef.Local -> FileInputStream(Library.fileOf(ctx, ref.docId))
         is PdfRef.External -> ctx.contentResolver.openInputStream(ref.uri) ?: error("Cannot open")
     }

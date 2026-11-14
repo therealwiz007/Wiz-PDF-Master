@@ -61,6 +61,7 @@ import androidx.compose.material.icons.outlined.AddToHomeScreen
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.Draw
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
@@ -147,7 +148,7 @@ private val InvertMatrix = ColorMatrix(
 )
 
 @Composable
-fun ViewerScreen(nav: Nav, ref: PdfRef) {
+fun ViewerScreen(nav: Nav, ref: PdfRef, startSigning: Boolean = false) {
     val ctx = LocalContext.current
     var source by remember(ref) { mutableStateOf<PdfSource?>(null) }
     var error by remember(ref) { mutableStateOf<String?>(null) }
@@ -179,7 +180,7 @@ fun ViewerScreen(nav: Nav, ref: PdfRef) {
 
     val src = source
     when {
-        src != null -> ViewerContent(nav, src)
+        src != null -> ViewerContent(nav, src, startSigning)
         needPassword -> PasswordPrompt(ref.title, wrongPassword, onCancel = { nav.pop() }) { password = it }
         error != null -> Column(
             Modifier.fillMaxSize().background(WizBg).statusBarsPadding().padding(28.dp),
@@ -229,12 +230,17 @@ private fun PasswordPrompt(title: String, wrong: Boolean, onCancel: () -> Unit, 
 }
 
 @Composable
-private fun ViewerContent(nav: Nav, src: PdfSource) {
+private fun ViewerContent(nav: Nav, src: PdfSource, startSigning: Boolean = false) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var chrome by remember { mutableStateOf(true) }
-    var night by remember { mutableStateOf(Prefs.nightReading(ctx)) }
+    var nightPref by remember { mutableStateOf(Prefs.nightReading(ctx)) }
+    val sign = remember(src) { SignSession(src) }
+    sign.motion = rememberMotionOn()
+    // Pages are colour-inverted at night; signatures must be placed on the real page colours.
+    val night = nightPref && !sign.active
+    var studioUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var menu by remember { mutableStateOf(false) }
     var searching by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
@@ -255,6 +261,64 @@ private fun ViewerContent(nav: Nav, src: PdfSource) {
         if (last > 0) listState.scrollToItem(last)
     }
     DisposableEffect(src) { onDispose { Prefs.setLastPage(ctx, src.ref.key, visiblePage) } }
+    LaunchedEffect(src) { if (startSigning) sign.enter() }
+
+    /** Page, x and y (0..1) at the middle of the screen: where a new signature is dropped. */
+    fun viewportCenter(): Triple<Int, Float, Float> {
+        val info = listState.layoutInfo
+        val layoutY = (zoom.height / 2f - zoom.offsetY) / zoom.scale
+        val item = info.visibleItemsInfo.firstOrNull { it.index == visiblePage }
+            ?: info.visibleItemsInfo.firstOrNull { layoutY >= it.offset && layoutY < it.offset + it.size }
+            ?: return Triple(visiblePage, .5f, .5f)
+        val side = 10f * ctx.resources.displayMetrics.density
+        val itemW = (zoom.width - side * 2).coerceAtLeast(1f)
+        val layoutX = (zoom.width / 2f - zoom.offsetX) / zoom.scale
+        val u = ((layoutX - side) / itemW).coerceIn(.15f, .85f)
+        val v = ((layoutY - item.offset) / item.size.coerceAtLeast(1)).coerceIn(.1f, .9f)
+        return Triple(item.index, u, v)
+    }
+
+    fun place(sig: SavedSignature) {
+        scope.launch {
+            sign.ensureImage(ctx, sig.id)
+            val (page, u, v) = viewportCenter()
+            sign.add(scope, sig, page, u, v)
+        }
+    }
+
+    val saveSigned = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/pdf")
+    ) { uri ->
+        val d = sign.result?.doc
+        if (uri != null && d != null) scope.launch {
+            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { copyDocTo(ctx, d, uri) }
+            toast(ctx, if (ok) "Saved to device" else "Couldn't save the file")
+        }
+    }
+
+    fun runStamp(skipWarning: Boolean) {
+        val items = sign.placements.map { it.data() }
+        if (items.isEmpty()) return
+        scope.launch {
+            sign.busy = 0 to 0
+            val check = runCatching { PdfStamper.precheck(ctx, src) }
+            val c = check.getOrNull()
+            when {
+                c == null -> { sign.busy = null; sign.blocked = check.exceptionOrNull()?.message ?: "This PDF can't be signed."; return@launch }
+                c is PdfStamper.Check.Blocked -> { sign.busy = null; sign.blocked = c.why; return@launch }
+                c is PdfStamper.Check.Warn && !skipWarning -> { sign.busy = null; sign.warnCert = true; return@launch }
+            }
+            val r = runCatching { PdfStamper.stamp(ctx, src, items) { d, t -> scope.launch { sign.busy = d to t } } }
+            sign.busy = null
+            r.onSuccess { res -> sign.exit(); sign.result = res }
+                .onFailure { sign.blocked = it.message ?: "Couldn't save the signed copy." }
+        }
+    }
+
+    androidx.activity.compose.BackHandler(enabled = sign.active && studioUri == null) {
+        if (sign.busy != null) return@BackHandler
+        if (sign.placements.isEmpty()) sign.exit() else sign.confirmDiscard = true
+    }
 
     fun jumpToHit(i: Int) {
         val h = hits.getOrNull(i) ?: return
@@ -297,15 +361,27 @@ private fun ViewerContent(nav: Nav, src: PdfSource) {
             hits = hits,
             currentHit = hits.getOrNull(hitIndex),
             topPadding = androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 70.dp,
-            onTap = { chrome = !chrome },
+            onTap = { if (sign.active) sign.selected = null else chrome = !chrome },
             onVisiblePage = { visiblePage = it },
             controller = zoomer,
-            handleGestures = false
+            handleGestures = false,
+            sign = sign
         )
 
         // ---- Top bar
         AnimatedVisibility(
-            chrome || searching,
+            sign.active,
+            enter = slideInVertically { -it } + fadeIn(),
+            exit = slideOutVertically { -it } + fadeOut()
+        ) {
+            SignTopBar(
+                sign, visiblePage,
+                onClose = { if (sign.placements.isEmpty()) sign.exit() else sign.confirmDiscard = true },
+                onDone = { sign.selected = null; runStamp(skipWarning = false) }
+            )
+        }
+        AnimatedVisibility(
+            (chrome || searching) && !sign.active,
             enter = slideInVertically { -it } + fadeIn(),
             exit = slideOutVertically { -it } + fadeOut()
         ) {
@@ -317,13 +393,14 @@ private fun ViewerContent(nav: Nav, src: PdfSource) {
                             Text(src.ref.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text("${src.pageCount} page${if (src.pageCount == 1) "" else "s"}", style = MaterialTheme.typography.bodySmall, color = WizMuted)
                         }
+                        IconButton(onClick = { chrome = true; sign.enter() }) { Icon(Icons.Outlined.Draw, "Sign") }
                         IconButton(onClick = { searching = true }) { Icon(Icons.Outlined.Search, "Search") }
                         IconButton(onClick = { showGrid = true }) { Icon(Icons.Outlined.GridView, "Pages") }
                         Box {
                             IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "More") }
                             DropdownMenu(menu, { menu = false }, containerColor = WizPanelHi) {
                                 MenuItem(if (night) "Day reading" else "Night reading", if (night) Icons.Outlined.LightMode else Icons.Outlined.DarkMode) {
-                                    menu = false; night = !night; Prefs.setNightReading(ctx, night)
+                                    menu = false; nightPref = !nightPref; Prefs.setNightReading(ctx, nightPref)
                                 }
                                 MenuItem("Extract text (this page)", Icons.Outlined.TextSnippet) {
                                     menu = false
@@ -371,7 +448,29 @@ private fun ViewerContent(nav: Nav, src: PdfSource) {
 
         // ---- Bottom: page indicator + seek slider
         AnimatedVisibility(
-            chrome && src.pageCount > 1,
+            sign.active,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut()
+        ) {
+            SignBottomBar(
+                sign,
+                onAdd = { sign.sheet = true },
+                onDuplicate = {
+                    val sel = sign.selected
+                    val sig = sel?.let { SignatureStore.get(it.sigId) }
+                    if (sel != null && sig != null) {
+                        val (page, u, v) = viewportCenter()
+                        val samePage = page == sel.page
+                        sign.add(scope, sig, page, if (samePage) (sel.cx + .06f) else sel.cx, if (samePage) (sel.cy + .06f) else v, sel.ink, like = sel)
+                        if (!samePage) toast(ctx, "Copied to page ${page + 1}")
+                    }
+                }
+            )
+        }
+
+        AnimatedVisibility(
+            chrome && src.pageCount > 1 && !sign.active,
             modifier = Modifier.align(Alignment.BottomCenter),
             enter = slideInVertically { it } + fadeIn(),
             exit = slideOutVertically { it } + fadeOut()
@@ -397,7 +496,7 @@ private fun ViewerContent(nav: Nav, src: PdfSource) {
 
         // Floating page pill when the chrome is hidden.
         AnimatedVisibility(
-            !chrome, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 14.dp),
+            !chrome && !sign.active, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 14.dp),
             enter = fadeIn(), exit = fadeOut()
         ) {
             Surface(shape = RoundedCornerShape(50), color = WizGlass) {
@@ -415,6 +514,32 @@ private fun ViewerContent(nav: Nav, src: PdfSource) {
     }
     if (showInfo) InfoDialog(src) { showInfo = false }
     textSheet?.let { st -> TextSheet(src, st.page) { textSheet = null } }
+
+    // ---- Signing
+    if (sign.sheet) SignatureSheet(
+        sign,
+        onPick = { sig -> sign.sheet = false; place(sig) },
+        onNew = { uri -> sign.sheet = false; studioUri = uri },
+        onDismiss = { sign.sheet = false; if (sign.placements.isEmpty() && studioUri == null) sign.exit() }
+    )
+    studioUri?.let { uri ->
+        SignatureStudio(
+            uri,
+            onClose = { studioUri = null; if (sign.placements.isEmpty()) sign.sheet = true },
+            onSaved = { sig -> studioUri = null; if (!sign.active) sign.active = true; place(sig) }
+        )
+    }
+    SignDialogs(sign, onDiscard = { sign.exit() }, onSignAnyway = { runStamp(skipWarning = true) })
+    sign.busy?.let { SignBusyOverlay(it) }
+    sign.result?.let { res ->
+        SignResultSheet(
+            res,
+            onOpen = { sign.result = null; nav.replace(Screen.Viewer(PdfRef.Local(res.doc.id, res.doc.name))) },
+            onShare = { sharePdf(ctx, shareUriFor(ctx, res.doc), res.doc.name) },
+            onSave = { saveSigned.launch(safeFileName(res.doc.name) + ".pdf") },
+            onDismiss = { sign.result = null }
+        )
+    }
 }
 
 private data class TextSheetState(val page: Int)
@@ -564,7 +689,8 @@ internal fun Modifier.documentGestures(c: ZoomController): Modifier = pointerInp
         do {
             val event = awaitPointerEvent()
             val pressed = event.changes.filter { it.pressed }
-            if (pressed.size >= 2) {
+            // A pinch on a signature being placed belongs to the signature (it consumes it).
+            if (pressed.size >= 2 && pressed.none { it.isConsumed }) {
                 pinched = true
                 c.applyZoom(c.zoom.scale * event.calculateZoom(), event.calculateCentroid(), event.calculatePan())
                 event.changes.forEach { it.consume() }
@@ -604,7 +730,8 @@ internal fun ZoomableDocument(
     onVisiblePage: (Int) -> Unit,
     controller: ZoomController = rememberZoomController(listState, zoom),
     /** False when the screen puts [documentGestures] on a parent that also covers the title bar. */
-    handleGestures: Boolean = true
+    handleGestures: Boolean = true,
+    sign: SignSession? = null
 ) {
     val density = LocalDensity.current
     val c = controller
@@ -657,7 +784,8 @@ internal fun ZoomableDocument(
                 items(src.pageCount, key = { it }) { i ->
                     PageView(
                         src, i, (itemWidthPx * bucket).roundToInt().coerceAtMost(4096), night,
-                        hits.filter { it.page == i }, currentHit?.takeIf { it.page == i }
+                        hits.filter { it.page == i }, currentHit?.takeIf { it.page == i },
+                        sign, { zoom.scale }
                     )
                 }
             }
@@ -682,7 +810,10 @@ private fun flingList(
 }
 
 @Composable
-private fun PageView(src: PdfSource, index: Int, renderWidth: Int, night: Boolean, hits: List<Hit>, current: Hit?) {
+private fun PageView(
+    src: PdfSource, index: Int, renderWidth: Int, night: Boolean, hits: List<Hit>, current: Hit?,
+    sign: SignSession? = null, scale: () -> Float = { 1f }
+) {
     val (pw, ph) = src.sizes[index]
     val aspect = if (ph <= 0) 0.707f else pw.toFloat() / ph
     val bmp by produceState(initialValue = src.cached(index, renderWidth) ?: src.anyCached(index), index, renderWidth) {
@@ -719,6 +850,7 @@ private fun PageView(src: PdfSource, index: Int, renderWidth: Int, night: Boolea
                 }
             }
         }
+        if (sign != null && (sign.active || sign.placements.any { it.page == index })) SignLayer(sign, index, scale)
     }
 }
 
