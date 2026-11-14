@@ -50,7 +50,7 @@ Wiz PDF Master is a PDF scanner, PDF signer and PDF reader in one app. Scan docu
 • No tracking and no data collection
 • Your signatures and documents are stored privately inside the app
 
-Wiz PDF Master is a free PDF scanner and electronic signature app for students, freelancers, small businesses, landlords and tenants, and anyone who needs to scan and sign documents on the go.
+Wiz PDF Master is a PDF scanner and electronic signature app for students, freelancers, small businesses, landlords and tenants, and anyone who needs to scan and sign documents on the go.
 
 Note: Wiz PDF Master adds a visual handwritten signature (an image of your signature). It does not create certificate-based digital signatures.
 
