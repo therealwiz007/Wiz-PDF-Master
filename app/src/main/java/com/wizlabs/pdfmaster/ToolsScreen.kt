@@ -36,7 +36,10 @@ import androidx.compose.material.icons.automirrored.outlined.CallSplit
 import androidx.compose.material.icons.automirrored.outlined.MergeType
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Compress
+import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -82,7 +85,7 @@ private fun externalRef(ctx: Context, uri: Uri): PdfRef.External {
 }
 
 @Composable
-private fun ToolTopBar(title: String, subtitle: String?, onBack: () -> Unit) {
+internal fun ToolTopBar(title: String, subtitle: String?, onBack: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 6.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -129,6 +132,12 @@ fun ToolsScreen(nav: Nav) {
                 onClick = { pickFor = { Screen.Compress(it) } })
             SlimTile(Icons.Outlined.PhotoLibrary, "Images to PDF", "Pick photos, arrange them, save",
                 onClick = { pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
+            SlimTile(Icons.Outlined.Image, "PDF to JPG", "Save pages as pictures, or share them",
+                onClick = { pickFor = { Screen.ToJpg(it) } })
+            SlimTile(Icons.Outlined.Lock, "Password", "Lock a PDF, or remove its password",
+                onClick = { pickFor = { Screen.Protect(it) } })
+            SlimTile(Icons.Outlined.Badge, "Scan ID card", "Front and back on one page, real size",
+                onClick = { ScanSession.clear(ctx); ScanSession.idCard.value = true; nav.push(Screen.Camera) })
         }
     }
 
@@ -139,7 +148,7 @@ fun ToolsScreen(nav: Nav) {
 }
 
 @Composable
-private fun BusyDialogPlain(title: String, text: String) {
+internal fun BusyDialogPlain(title: String, text: String) {
     AlertDialog(
         onDismissRequest = {}, confirmButton = {}, title = { Text(title) },
         text = { Row(verticalAlignment = Alignment.CenterVertically) {

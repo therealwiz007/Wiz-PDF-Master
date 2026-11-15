@@ -215,6 +215,107 @@ object PdfOps {
         }
     }
 
+    /**
+     * A password to put on a PDF. Without an [ownerPassword], a file with limits gets a random one:
+     * the limits then hold for good, because nobody can open it "as owner" to lift them.
+     */
+    data class Protection(
+        val password: String,
+        val ownerPassword: String? = null,
+        val allowPrint: Boolean = true,
+        val allowCopy: Boolean = true,
+        val allowEdit: Boolean = true
+    ) {
+        val limited get() = !(allowPrint && allowCopy && allowEdit)
+        override fun toString() = "Protection(limited=$limited)"      // never log a password
+    }
+
+    /** Lock [doc] with [p] using AES with a key of [bits] (256 or 128). Takes effect when the document is saved. */
+    fun applyProtection(doc: PDDocument, p: Protection, bits: Int) {
+        val perm = AccessPermission().apply {
+            setCanPrint(p.allowPrint)
+            setCanPrintFaithful(p.allowPrint)
+            setCanExtractContent(p.allowCopy)
+            setCanExtractForAccessibility(true)
+            setCanModify(p.allowEdit)
+            setCanModifyAnnotations(p.allowEdit)
+            setCanAssembleDocument(p.allowEdit)
+            setCanFillInForm(true)
+        }
+        val owner = p.ownerPassword?.takeIf { it.isNotEmpty() }
+            ?: if (p.limited) java.util.UUID.randomUUID().toString() + java.util.UUID.randomUUID() else p.password
+        doc.isAllSecurityToBeRemoved = false
+        doc.protect(StandardProtectionPolicy(owner, p.password, perm).apply {
+            encryptionKeyLength = bits
+            isPreferAES = true
+        })
+    }
+
+    /** The result of [setPassword]: the saved document and the AES key size used (0 = password removed). */
+    class Secured(val doc: Doc, val bits: Int)
+
+    /**
+     * Add a password ([protection]) or remove the current one ([protection] = null), saving the
+     * result to the library as [name], or over the library document [replaceDocId]. AES-256 is
+     * used when this phone can do it, otherwise AES-128.
+     */
+    suspend fun setPassword(
+        ctx: Context,
+        ref: PdfRef,
+        currentPassword: String?,
+        protection: Protection?,
+        name: String,
+        replaceDocId: String? = null
+    ): Secured = withContext(Dispatchers.IO) {
+        sweep(ctx)
+        val src = sourceFile(ctx, ref)
+        val old = replaceDocId?.let { Library.doc(it) }
+        val id = old?.id ?: Library.newId()
+        val out = Library.fileOf(ctx, id)
+        val part = File(out.path + ".part")
+        try {
+            requireSpace(ctx, src.file.length())
+            var pages = 0
+            var searchable = false
+            fun write(bits: Int) = load(ctx, src.file, currentPassword).use { doc ->
+                if (doc.isEncrypted && !doc.currentAccessPermission.isOwnerPermission)
+                    throw OpError("This PDF also has an owner password. Open it with that password to change its protection.")
+                pages = doc.numberOfPages
+                searchable = hasText(doc)
+                if (protection == null) doc.isAllSecurityToBeRemoved = true else applyProtection(doc, protection, bits)
+                doc.save(part)
+            }
+            var bits = if (protection == null) 0 else 256
+            try {
+                write(bits)
+            } catch (e: OpError) {
+                throw e
+            } catch (e: PasswordRequired) {
+                throw e
+            } catch (e: Exception) {
+                // No AES-256 on this phone (or this PDFBox build): AES-128 works everywhere.
+                if (protection == null) throw e
+                part.delete()
+                bits = 128
+                write(bits)
+            }
+            coroutineContext.ensureActive()
+            moveInto(part, out)
+            makeThumb(ctx, out, id, protection?.password)
+            val now = System.currentTimeMillis()
+            val d = Doc(id, old?.name ?: name, pages, old?.created ?: now, now, out.length(), searchable)
+            Library.add(d)
+            Secured(d, bits)
+        } catch (e: java.io.IOException) {
+            throw OpError("Couldn't save the PDF. Check free storage and try again.")
+        } catch (e: OutOfMemoryError) {
+            throw OpError("This PDF is too large for this phone's memory.")
+        } finally {
+            part.delete()
+            src.done()
+        }
+    }
+
     /** One new library document per group of pages. [onProgress] gets (done, total). */
     suspend fun split(
         ctx: Context,

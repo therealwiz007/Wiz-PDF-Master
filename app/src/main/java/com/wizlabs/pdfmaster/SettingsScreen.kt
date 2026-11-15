@@ -47,6 +47,7 @@ fun SettingsScreen(nav: Nav) {
     val ctx = LocalContext.current
     var filter by remember { mutableStateOf(Prefs.defaultFilter(ctx)) }
     var auto by remember { mutableStateOf(Prefs.autoCapture(ctx)) }
+    var rotate by remember { mutableStateOf(Prefs.autoRotate(ctx)) }
     var ocr by remember { mutableStateOf(Prefs.ocrDefault(ctx)) }
     var page by remember { mutableStateOf(Prefs.pageSize(ctx)) }
     var night by remember { mutableStateOf(Prefs.nightReading(ctx)) }
@@ -70,6 +71,8 @@ fun SettingsScreen(nav: Nav) {
                 }
                 Spacer(Modifier.height(14.dp))
                 ToggleRow("Auto capture", "Takes the photo by itself when the page is steady", auto) { auto = it; Prefs.setAutoCapture(ctx, it) }
+                Spacer(Modifier.height(14.dp))
+                ToggleRow("Auto-rotate pages", "Turns pages the right way up and straightens tilted text", rotate) { rotate = it; Prefs.setAutoRotate(ctx, it) }
             }
             SectionHeader("Saving")
             Card(Modifier.rise(intro, 2)) {

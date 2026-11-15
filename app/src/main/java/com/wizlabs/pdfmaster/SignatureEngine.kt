@@ -52,7 +52,7 @@ class SignatureCutter(src: Bitmap) : Closeable {
             }
             // Darkness: min(R,G,B) gives the strongest contrast for black, blue and red pens.
             val m = Mat(); Core.min(ch[0], ch[1], m); Core.min(m, ch[2], m)
-            val bg = ScanEngine.backgroundOf(m, dilateK = 7, dilateIter = 2)
+            val bg = ScanEngine.backgroundOf(m, closeK = 21)
             val bf = Mat(); bg.convertTo(bf, CvType.CV_32F); Core.max(bf, Scalar(1.0), bf)
             val mf = Mat(); m.convertTo(mf, CvType.CV_32F)
             Core.divide(mf, bf, mf, 255.0)

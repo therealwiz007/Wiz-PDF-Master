@@ -31,6 +31,7 @@ object PdfBuilder {
         ocr: Boolean,
         pageSize: PageSize,
         quality: Int = 82,
+        idCard: Boolean = false,
         onProgress: (Progress) -> Unit
     ): Doc = withContext(Dispatchers.Default) {
         com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(ctx)
@@ -38,6 +39,7 @@ object PdfBuilder {
         val out = Library.fileOf(ctx, id)
         val tmp = File(out.path + ".part")
         var anyText = false
+        var sheets = 0
         PDDocument().use { doc ->
             doc.documentInformation = PDDocumentInformation().apply {
                 title = name
@@ -45,27 +47,92 @@ object PdfBuilder {
                 producer = "Wiz PDF Master"
                 creationDate = Calendar.getInstance()
             }
-            pages.forEachIndexed { i, page ->
+            if (idCard) {
+                pages.chunked(IdCardLayout.PER_SHEET).forEachIndexed { s, group ->
+                    coroutineContext.ensureActive()
+                    onProgress(Progress(s * IdCardLayout.PER_SHEET + 1, pages.size, "Enhancing"))
+                    val cards = group.mapNotNull { renderCard(it) }
+                    if (cards.isEmpty()) return@forEachIndexed
+                    if (sheets == 0) saveCardThumb(ctx, id, cards)
+                    onProgress(Progress(s * IdCardLayout.PER_SHEET + group.size, pages.size, "Writing"))
+                    addCardSheet(doc, cards)
+                    cards.forEach { it.recycle() }
+                    sheets++
+                }
+            } else pages.forEachIndexed { i, page ->
                 coroutineContext.ensureActive()
                 onProgress(Progress(i + 1, pages.size, "Enhancing"))
-                val bmp = ScanSession.render(page) ?: return@forEachIndexed
-                if (i == 0) ScanEngine.saveJpeg(ScanEngine.thumb(bmp, 420), Library.thumbOf(ctx, id), 85)
-                val text = if (ocr) {
-                    onProgress(Progress(i + 1, pages.size, "Reading text"))
-                    runCatching { Ocr.recognize(bmp) }.getOrNull()
-                } else null
+                var text: OcrResult? = null
+                var look = page.look
+                val bmp = ScanSession.lowMemoryRetry(ScanEngine.MAX_SIDE) { side ->
+                    val base = ScanSession.renderBase(page, side) ?: return@lowMemoryRetry null
+                    try {
+                        val l = look ?: ScanEngine.pickFilter(base).also { look = it }
+                        if (ocr && text == null) {
+                            onProgress(Progress(i + 1, pages.size, "Reading text"))
+                            // Text is read from the gray page, never from the black & white one.
+                            text = runCatching { Ocr.recognize(base, flatten = true) }.getOrNull()
+                        }
+                        ScanEngine.filter(base, l)
+                    } finally {
+                        base.recycle()
+                    }
+                } ?: return@forEachIndexed
+                if (sheets == 0) ScanEngine.saveJpeg(ScanEngine.thumb(bmp, 420), Library.thumbOf(ctx, id), 85)
                 if (!text?.words.isNullOrEmpty()) anyText = true
                 onProgress(Progress(i + 1, pages.size, "Writing"))
-                addImagePage(doc, bmp, text, pageSize, quality, bilevel = page.filter == ScanFilter.BW)
+                addImagePage(doc, bmp, text, pageSize, quality, bilevel = look == ScanFilter.BW)
                 bmp.recycle()
+                sheets++
             }
+            if (sheets == 0) throw java.io.IOException("No page could be prepared")
             doc.save(tmp)
         }
         if (!tmp.renameTo(out)) { tmp.copyTo(out, overwrite = true); tmp.delete() }
         val now = System.currentTimeMillis()
-        val d = Doc(id, name, pages.size, now, now, out.length(), anyText)
+        val d = Doc(id, name, sheets, now, now, out.length(), anyText)
         Library.add(d)
         d
+    }
+
+    /** 600 dpi on a real card: more only makes the file bigger. */
+    private const val CARD_MAX_SIDE = 2024
+
+    private fun renderCard(page: ScanPage): Bitmap? {
+        val full = ScanSession.render(page, ScanEngine.MAX_SIDE) ?: return null
+        if (maxOf(full.width, full.height) <= CARD_MAX_SIDE) return full
+        return ScanEngine.thumb(full, CARD_MAX_SIDE).also { full.recycle() }
+    }
+
+    /** Library thumbnail of an ID scan: the cards stacked on a white sheet, like the saved page. */
+    private fun saveCardThumb(ctx: Context, id: String, cards: List<Bitmap>) = runCatching {
+        val w = 420; val h = (w * PDRectangle.A4.height / PDRectangle.A4.width).toInt()
+        val sheet = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        sheet.eraseColor(android.graphics.Color.WHITE)
+        val c = android.graphics.Canvas(sheet)
+        val k = w / PDRectangle.A4.width
+        val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+        IdCardLayout.boxes(PDRectangle.A4.width, PDRectangle.A4.height, cards.map { it.width >= it.height }).forEachIndexed { i, b ->
+            val top = (PDRectangle.A4.height - b.y - b.h) * k
+            c.drawBitmap(cards[i], null, android.graphics.RectF(b.x * k, top, (b.x + b.w) * k, top + b.h * k), paint)
+        }
+        ScanEngine.saveJpeg(sheet, Library.thumbOf(ctx, id), 85)
+        sheet.recycle()
+    }
+
+    /** One A4 sheet with the cards at their real size (85.6 × 54 mm), centred, one above the other. */
+    private fun addCardSheet(doc: PDDocument, cards: List<Bitmap>) {
+        val rect = PDRectangle.A4
+        val page = PDPage(rect)
+        doc.addPage(page)
+        val boxes = IdCardLayout.boxes(rect.width, rect.height, cards.map { it.width >= it.height })
+        PDPageContentStream(doc, page).use { cs ->
+            cards.forEachIndexed { i, bmp ->
+                val bytes = ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it) }.toByteArray()
+                val b = boxes[i]
+                cs.drawImage(JPEGFactory.createFromByteArray(doc, bytes), b.x, b.y, b.w, b.h)
+            }
+        }
     }
 
     private fun addImagePage(doc: PDDocument, bmp: Bitmap, ocr: OcrResult?, size: PageSize, quality: Int, bilevel: Boolean) {
@@ -94,7 +161,8 @@ object PdfBuilder {
         val oy = (rect.height - dh) / 2f
         PDPageContentStream(doc, page).use { cs ->
             cs.drawImage(img, ox, oy, dw, dh)
-            if (ocr != null && ocr.words.isNotEmpty()) writeInvisibleText(cs, ocr, ox, oy, scale)
+            // The text may have been read on a differently sized copy of the page.
+            if (ocr != null && ocr.words.isNotEmpty()) writeInvisibleText(cs, ocr, ox, oy, scale * bmp.width / ocr.width)
         }
     }
 

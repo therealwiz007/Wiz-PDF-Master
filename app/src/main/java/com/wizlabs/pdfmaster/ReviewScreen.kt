@@ -79,6 +79,7 @@ fun ReviewScreen(nav: Nav) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val pages = ScanSession.pages
+    val idCard = ScanSession.idCard.value
     var confirmDiscard by remember { mutableStateOf(false) }
     var showSave by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf<PdfBuilder.Progress?>(null) }
@@ -158,11 +159,13 @@ fun ReviewScreen(nav: Nav) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             ScanFilter.entries.forEach { f ->
-                WizChip(f.label, page.filter == f, { ScanSession.update(current) { it.copy(filter = f) } })
+                // "Auto" says what it chose for this page.
+                val label = if (f == ScanFilter.AUTO && page.filter == f && page.autoPick != null) "Auto · ${page.autoPick.label}" else f.label
+                WizChip(label, page.filter == f, { ScanSession.update(ctx, current) { it.copy(filter = f) } })
             }
             TextButton(onClick = {
                 val f = page.filter
-                pages.indices.forEach { idx -> if (pages[idx].filter != f) ScanSession.update(idx) { it.copy(filter = f) } }
+                pages.indices.forEach { idx -> if (pages[idx].filter != f) ScanSession.update(ctx, idx) { it.copy(filter = f) } }
                 Prefs.setDefaultFilter(ctx, f)
                 toast(ctx, "${f.label} applied to all pages")
             }) { Text("Apply to all", color = WizYellow) }
@@ -174,12 +177,12 @@ fun ReviewScreen(nav: Nav) {
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             Tool(Icons.Outlined.Crop, "Crop") { nav.push(Screen.Crop(current)) }
-            Tool(Icons.Outlined.RotateRight, "Rotate") { ScanSession.update(current) { it.copy(rotation = (it.rotation + 90) % 360) } }
+            Tool(Icons.Outlined.RotateRight, "Rotate") { ScanSession.update(ctx, current) { it.copy(rotation = (it.rotation + 90) % 360) } }
             Tool(Icons.Outlined.ChevronLeft, "Move left", enabled = current > 0) {
-                ScanSession.move(current, current - 1); scope.launch { pager.scrollToPage(current - 1) }
+                ScanSession.move(ctx, current, current - 1); scope.launch { pager.scrollToPage(current - 1) }
             }
             Tool(Icons.Outlined.ChevronRight, "Move right", enabled = current < pages.lastIndex) {
-                ScanSession.move(current, current + 1); scope.launch { pager.scrollToPage(current + 1) }
+                ScanSession.move(ctx, current, current + 1); scope.launch { pager.scrollToPage(current + 1) }
             }
             Tool(Icons.Outlined.Delete, "Delete", tint = WizBad) { ScanSession.remove(ctx, current) }
         }
@@ -226,20 +229,25 @@ fun ReviewScreen(nav: Nav) {
         ) {
             Icon(Icons.Outlined.PictureAsPdf, null)
             Spacer(Modifier.width(8.dp))
-            Text("Save PDF  ·  ${pages.size} page${if (pages.size == 1) "" else "s"}", fontWeight = FontWeight.Bold)
+            Text(
+                if (idCard) "Save ID card PDF  ·  ${pages.size} side${if (pages.size == 1) "" else "s"}"
+                else "Save PDF  ·  ${pages.size} page${if (pages.size == 1) "" else "s"}",
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 
     if (showSave) SaveDialog(
+        idCard = idCard,
         onDismiss = { showSave = false },
         onSave = { name, ocr, size ->
             showSave = false
-            Prefs.setOcrDefault(ctx, ocr); Prefs.setPageSize(ctx, size)
+            if (!idCard) { Prefs.setOcrDefault(ctx, ocr); Prefs.setPageSize(ctx, size) }
             progress = PdfBuilder.Progress(0, pages.size, "Preparing")
             saveJob = scope.launch {
                 val snapshot = pages.toList()
                 val result = runCatching {
-                    PdfBuilder.build(ctx, snapshot, name, ocr, size) { p -> scope.launch { progress = p } }
+                    PdfBuilder.build(ctx, snapshot, name, ocr && !idCard, size, idCard = idCard) { p -> scope.launch { progress = p } }
                 }
                 progress = null
                 result.onSuccess { doc ->
@@ -304,9 +312,9 @@ private fun Tool(icon: ImageVector, label: String, enabled: Boolean = true, tint
 }
 
 @Composable
-private fun SaveDialog(onDismiss: () -> Unit, onSave: (String, Boolean, PageSize) -> Unit) {
+private fun SaveDialog(idCard: Boolean, onDismiss: () -> Unit, onSave: (String, Boolean, PageSize) -> Unit) {
     val ctx = LocalContext.current
-    var name by remember { mutableStateOf(PdfBuilder.defaultName()) }
+    var name by remember { mutableStateOf(if (idCard) PdfBuilder.defaultName().replaceFirst("Scan", "ID card") else PdfBuilder.defaultName()) }
     var ocr by remember { mutableStateOf(Prefs.ocrDefault(ctx)) }
     var size by remember { mutableStateOf(Prefs.pageSize(ctx)) }
     AlertDialog(
@@ -316,6 +324,10 @@ private fun SaveDialog(onDismiss: () -> Unit, onSave: (String, Boolean, PageSize
             Column {
                 OutlinedTextField(name, { name = it }, label = { Text("File name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(16.dp))
+                if (idCard) Text(
+                    "Both sides go on one A4 page at the card's real size (85.6 × 54 mm), ready to print.",
+                    style = MaterialTheme.typography.bodySmall, color = WizMuted
+                ) else Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Make text searchable", style = MaterialTheme.typography.titleSmall)
@@ -328,6 +340,7 @@ private fun SaveDialog(onDismiss: () -> Unit, onSave: (String, Boolean, PageSize
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     PageSize.entries.forEach { p -> WizChip(p.label, size == p, { size = p }) }
+                }
                 }
             }
         },

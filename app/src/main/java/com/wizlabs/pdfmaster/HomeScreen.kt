@@ -174,6 +174,32 @@ fun HomeScreen(nav: Nav) {
                     }
                 }
             }
+            // An unfinished scan from last time (the app was closed or killed before saving).
+            ScanSession.pending.value?.let { draft ->
+                item(key = "draft") {
+                    Spacer(Modifier.height(10.dp))
+                    Surface(
+                        shape = RoundedCornerShape(18.dp), color = WizPanel, border = BorderStroke(1.dp, WizYellow.copy(alpha = .55f)),
+                        modifier = Modifier.fillMaxWidth().animateItem()
+                    ) {
+                        Row(Modifier.padding(start = 16.dp, end = 6.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                val n = draft.pages.size
+                                Text(
+                                    if (draft.idCard) "Continue ID card scan ($n side${if (n == 1) "" else "s"})"
+                                    else "Continue scan ($n page${if (n == 1) "" else "s"})",
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                Text("Not saved yet", style = MaterialTheme.typography.bodySmall, color = WizMuted)
+                            }
+                            TextButton(onClick = { ScanSession.clear(ctx) }) { Text("Discard", color = WizMuted) }
+                            TextButton(onClick = {
+                                if (ScanSession.resume(ctx)) nav.push(Screen.Review) else toast(ctx, "That scan is no longer available")
+                            }) { Text("Continue", color = WizYellow, fontWeight = FontWeight.Bold) }
+                        }
+                    }
+                }
+            }
             item {
                 Spacer(Modifier.height(10.dp))
                 ScanHero(onClick = { ScanSession.clear(ctx); nav.push(Screen.Camera) }, modifier = Modifier.rise(intro, 1))
@@ -506,16 +532,24 @@ private fun recentThumb(ctx: Context, uri: String): Bitmap? = runCatching {
 /** Decode, auto-crop and stage gallery images as scan pages. */
 suspend fun importImages(ctx: Context, uris: List<Uri>, onProgress: (Int) -> Unit) = withContext(Dispatchers.Default) {
     ScanEngine.ensure()
-    val filter = Prefs.defaultFilter(ctx)
+    val card = withContext(Dispatchers.Main) { ScanSession.idCard.value }
     uris.forEachIndexed { i, uri ->
         // decodeOriented returns null when memory runs out: try once more at half the size.
         val bmp = ScanEngine.decodeOriented(ctx, uri) ?: ScanEngine.decodeOriented(ctx, uri, ScanEngine.MAX_SIDE / 2)
         if (bmp != null) {
             val f = File(ScanSession.dir(ctx), "${System.nanoTime()}.jpg")
-            ScanEngine.saveJpeg(bmp, f)
-            val quad = ScanEngine.detect(bmp) ?: Quad.FULL
-            bmp.recycle()
-            withContext(Dispatchers.Main) { ScanSession.pages.add(ScanPage(original = f, quad = quad, filter = filter)) }
+            val page = try {
+                ScanEngine.saveJpeg(bmp, f)
+                // Corners are refined on the photo itself; look and orientation are worked out here too.
+                ScanIntake.page(ctx, f, bmp, null, card)
+            } catch (_: OutOfMemoryError) {
+                ScanPage(original = f, quad = Quad.FULL, filter = Prefs.defaultFilter(ctx), card = card)
+            } catch (_: java.io.IOException) {
+                f.delete(); null
+            } finally {
+                bmp.recycle()
+            }
+            if (page != null) withContext(Dispatchers.Main) { ScanSession.add(ctx, page) }
         }
         withContext(Dispatchers.Main) { onProgress(i + 1) }
     }

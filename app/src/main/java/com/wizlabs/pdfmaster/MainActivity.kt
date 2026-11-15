@@ -45,6 +45,14 @@ sealed interface Screen {
     data class Compress(val ref: PdfRef, val password: String? = null) : Screen {
         override fun toString() = "Compress(${ref.key})"
     }
+    /** Export pages as JPEG pictures; [page] preselects a single page (zero-based). */
+    data class ToJpg(val ref: PdfRef, val password: String? = null, val page: Int? = null) : Screen {
+        override fun toString() = "ToJpg(${ref.key}, $page)"
+    }
+    /** Add a password to a PDF, or remove the one it has. */
+    data class Protect(val ref: PdfRef, val password: String? = null) : Screen {
+        override fun toString() = "Protect(${ref.key})"
+    }
 }
 
 class Nav {
@@ -160,6 +168,8 @@ fun AppRoot(nav: Nav) {
                 Screen.Merge -> MergeScreen(nav)
                 is Screen.Pages -> PagesScreen(nav, screen.ref, screen.password, screen.split)
                 is Screen.Compress -> CompressScreen(nav, screen.ref, screen.password)
+                is Screen.ToJpg -> PdfToJpgScreen(nav, screen.ref, screen.password, screen.page)
+                is Screen.Protect -> ProtectScreen(nav, screen.ref, screen.password)
             }
           }
         }

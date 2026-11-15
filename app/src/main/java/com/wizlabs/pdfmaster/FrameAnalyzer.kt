@@ -22,6 +22,8 @@ class FrameInfo(val quad: Quad?, val sharpness: Double, val glare: Boolean)
 class FrameAnalyzer {
     private var lastRun = 0L
     private var glareRun = 0
+    /** Outline of the previous analysed frame (sensor orientation, untrimmed): steadies the choice between candidates. */
+    private var lastQuad: Quad? = null
     private var rowU = ByteArray(0)
     private var rowV = ByteArray(0)
     private var chromaBytes = ByteArray(0)
@@ -46,13 +48,15 @@ class FrameAnalyzer {
                 y.release()
             }
             // detectGray releases the Mat it is handed, so give it a copy and keep ours for glare.
-            val quad = ScanEngine.detectGray(small) {
+            val raw = ScanEngine.detectRaw(small, lastQuad) {
                 chromaOf(image).also { chroma = it }.clone()
             }
-            if (quad == null) {
+            lastQuad = raw
+            if (raw == null) {
                 glareRun = 0
                 return FrameInfo(null, Double.MAX_VALUE, false)
             }
+            val quad = raw.inset(QuadMath.INSET_COARSE)
             val sharp = ScanEngine.sharpness(small, quad)
             val c = chroma ?: chromaOf(image).also { chroma = it }
             val glaring = ScanEngine.glare(small, c, quad) > ScanTuning.GLARE_FRACTION

@@ -72,6 +72,7 @@ import androidx.compose.material.icons.automirrored.outlined.CallSplit
 import androidx.compose.material.icons.outlined.Compress
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.ShortText
 import androidx.compose.material.icons.outlined.TextSnippet
@@ -426,6 +427,20 @@ private fun ViewerContent(nav: Nav, src: PdfSource, startSigning: Boolean = fals
                                 }
                                 MenuItem("Compress", Icons.Outlined.Compress) {
                                     menu = false; nav.push(Screen.Compress(src.ref, src.password))
+                                }
+                                MenuItem("Save pages as JPG", Icons.Outlined.Image) {
+                                    menu = false; nav.push(Screen.ToJpg(src.ref, src.password))
+                                }
+                                MenuItem(if (src.password != null) "Remove password" else "Add password", Icons.Outlined.Lock) {
+                                    menu = false; nav.push(Screen.Protect(src.ref, src.password))
+                                }
+                                MenuItem("Share this page as image", Icons.Outlined.Image) {
+                                    menu = false
+                                    val page = visiblePage
+                                    scope.launch {
+                                        val uri = ImageExport.shareable(ctx, src, page, 200, 90)
+                                        if (uri != null) shareImages(ctx, listOf(uri), src.ref.title) else toast(ctx, "Couldn't make a picture of this page")
+                                    }
                                 }
                                 MenuItem("Share", Icons.Outlined.Share) {
                                     menu = false

@@ -137,6 +137,8 @@ private fun CameraContent(nav: Nav) {
     var torch by remember { mutableStateOf(false) }
     var auto by remember { mutableStateOf(Prefs.autoCapture(ctx)) }
     var batch by remember { mutableStateOf(ScanSession.pages.isNotEmpty()) }
+    // ID card: front, then back; both end up at real size on one sheet.
+    val idMode = ScanSession.idCard.value
     var liveQuad by remember { mutableStateOf<Quad?>(null) }
     var steady by remember { mutableStateOf(0f) }        // 0..1 progress towards auto capture
     var capturing by remember { mutableStateOf(false) }
@@ -202,13 +204,17 @@ private fun CameraContent(nav: Nav) {
             val saved = imageCapture.saveTo(file, mainExecutor)
             runCatching { control?.cancelFocusAndMetering() }
             val page = if (saved.isFailure) null else withContext(Dispatchers.Default) {
-                // Edges and focus are judged on a small decode; the full photo is only read at render time.
-                val small = ScanEngine.decodeFile(file, 1000)
-                if (small == null) { file.delete(); return@withContext null }
-                val quad = ScanEngine.detect(small) ?: hint ?: Quad.FULL
-                val blurry = !isSharp(ScanEngine.sharpness(small, quad), ScanTuning.BLUR_MIN_CAPTURE)
-                small.recycle()
-                ScanPage(original = file, quad = quad, filter = Prefs.defaultFilter(ctx), blurry = blurry)
+                // Corners, focus, look and orientation are judged on a mid-size decode; the full
+                // photo is only read at render time.
+                val photo = ScanEngine.decodeFile(file, ScanEngine.REFINE_SIDE)
+                if (photo == null) { file.delete(); return@withContext null }
+                try {
+                    ScanIntake.page(ctx, file, photo, hint, idMode)
+                } catch (_: OutOfMemoryError) {
+                    ScanPage(original = file, quad = hint ?: Quad.FULL, filter = Prefs.defaultFilter(ctx), card = idMode)
+                } finally {
+                    photo.recycle()
+                }
             }
             capturing = false
             tracker.reset()
@@ -217,9 +223,13 @@ private fun CameraContent(nav: Nav) {
                 toast(ctx, saved.exceptionOrNull()?.message?.let { "Capture failed: $it" } ?: "Capture failed, try again")
                 return@launch
             }
-            ScanSession.pages.add(page)
+            ScanSession.add(ctx, page)
             ScanSession.selected.intValue = ScanSession.pages.lastIndex
-            if (!batch) goReview() else blurryPage = page.takeIf { it.blurry }
+            when {
+                idMode -> if (ScanSession.pages.size % IdCardLayout.PER_SHEET == 0) goReview() else blurryPage = page.takeIf { it.blurry }
+                !batch -> goReview()
+                else -> blurryPage = page.takeIf { it.blurry }
+            }
         }
     }
 
@@ -292,8 +302,10 @@ private fun CameraContent(nav: Nav) {
                 Spacer(Modifier.weight(1f))
                 WizChip("Auto", auto, { auto = !auto; Prefs.setAutoCapture(ctx, auto) })
                 Spacer(Modifier.size(8.dp))
-                WizChip(if (batch) "Batch" else "Single", batch, { batch = !batch })
-                Spacer(Modifier.size(8.dp))
+                if (!idMode) {
+                    WizChip(if (batch) "Batch" else "Single", batch, { batch = !batch })
+                    Spacer(Modifier.size(8.dp))
+                }
                 GlassIconButton(
                     if (torch) Icons.Outlined.FlashlightOn else Icons.Outlined.FlashlightOff,
                     "Torch", onClick = { torch = !torch }, active = torch
@@ -321,11 +333,11 @@ private fun CameraContent(nav: Nav) {
                     StatusPill(
                         when {
                             capturing -> "Capturing…"
-                            liveQuad == null -> "Point at a document"
+                            liveQuad == null -> if (idMode) "Point at the card" else "Point at a document"
                             glare -> "Tilt to avoid glare"
                             auto && blurHeld -> "Focusing…"
                             auto && steady > 0f -> "Hold steady…"
-                            else -> "Document found"
+                            else -> if (idMode) "Card found" else "Document found"
                         },
                         Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
                     )
@@ -346,6 +358,24 @@ private fun CameraContent(nav: Nav) {
                             }
                         }
                     }
+                }
+            }
+
+            // ---- Mode: a plain document, or the two sides of an ID card (only before the first page)
+            if (ScanSession.pages.isEmpty() || idMode) Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (ScanSession.pages.isEmpty()) {
+                    WizChip("Document", !idMode, { ScanSession.idCard.value = false })
+                    WizChip("ID card", idMode, { ScanSession.idCard.value = true })
+                } else {
+                    val side = ScanSession.pages.size % IdCardLayout.PER_SHEET
+                    Text(
+                        if (side == 0) "Front of the card" else "Now turn the card over: back side",
+                        color = WizYellow, style = MaterialTheme.typography.labelLarge
+                    )
                 }
             }
 

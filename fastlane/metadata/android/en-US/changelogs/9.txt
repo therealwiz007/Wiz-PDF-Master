@@ -1,0 +1,9 @@
+New: sharper scans and more tools
+• Page corners are found more exactly and tilted text is straightened
+• Pages turn the right way up by themselves
+• Cleaner shadow removal and crisper black & white
+• "Auto" look picks colour, grayscale or black & white for each page
+• ID card mode: front and back on one page at real size
+• PDF to JPG: save pages to your gallery or share them
+• Add or remove a PDF password
+• An unfinished scan is kept, so you can continue it later

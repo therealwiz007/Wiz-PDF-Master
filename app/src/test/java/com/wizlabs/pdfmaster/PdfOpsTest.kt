@@ -80,4 +80,51 @@ class PdfOpsTest {
         assertEquals(data.size, inflater.inflate(back))
         assertArrayEquals(data, back)
     }
+
+    // ---- Passwords ------------------------------------------------------------------------------
+
+    private fun protectedBytes(p: PdfOps.Protection, bits: Int): ByteArray {
+        val doc = docWithPages(2)
+        PdfOps.applyProtection(doc, p, bits)
+        return ByteArrayOutputStream().also { doc.save(it) }.toByteArray().also { doc.close() }
+    }
+
+    private fun opensWithout(bytes: ByteArray): Boolean = try {
+        PDDocument.load(bytes).close(); true
+    } catch (e: com.tom_roush.pdfbox.pdmodel.encryption.InvalidPasswordException) {
+        false
+    }
+
+    @Test fun passwordLocksAndUnlocks() {
+        for (bits in intArrayOf(128, 256)) {
+            val bytes = protectedBytes(PdfOps.Protection("s3cret"), bits)
+            assertTrue("needs a password at $bits", !opensWithout(bytes))
+            PDDocument.load(bytes, "s3cret").use { doc ->
+                assertTrue(doc.isEncrypted)
+                assertEquals(2, doc.numberOfPages)
+                assertEquals(bits, doc.encryption.length)
+                // No limits were asked for: the password gives full rights, so it can be removed again.
+                assertTrue(doc.currentAccessPermission.isOwnerPermission)
+                doc.isAllSecurityToBeRemoved = true
+                val plain = ByteArrayOutputStream().also { doc.save(it) }.toByteArray()
+                assertTrue(opensWithout(plain))
+            }
+        }
+    }
+
+    @Test fun limitsApplyToTheOpenPassword() {
+        val bytes = protectedBytes(PdfOps.Protection("open", "boss", allowPrint = false, allowCopy = false), 128)
+        PDDocument.load(bytes, "open").use { doc ->
+            val p = doc.currentAccessPermission
+            assertTrue(!p.isOwnerPermission && !p.canPrint() && !p.canExtractContent() && p.canModify())
+        }
+        PDDocument.load(bytes, "boss").use { assertTrue(it.currentAccessPermission.isOwnerPermission) }
+    }
+
+    @Test fun limitsWithoutOwnerPasswordCannotBeLifted() {
+        val bytes = protectedBytes(PdfOps.Protection("open", allowEdit = false), 128)
+        PDDocument.load(bytes, "open").use { doc ->
+            assertTrue(!doc.currentAccessPermission.isOwnerPermission && !doc.currentAccessPermission.canModify())
+        }
+    }
 }

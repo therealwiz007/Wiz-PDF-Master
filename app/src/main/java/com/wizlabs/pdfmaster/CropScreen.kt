@@ -167,7 +167,15 @@ fun CropScreen(nav: Nav, index: Int) {
             WizChip("Auto detect", false, {
                 scope.launch {
                     val found = withContext(Dispatchers.Default) {
-                        ScanEngine.decodeFile(page.original, 1400)?.let { src -> ScanEngine.detect(src).also { src.recycle() } }
+                        ScanEngine.decodeFile(page.original, ScanEngine.REFINE_SIDE)?.let { src ->
+                            try {
+                                ScanEngine.detectRaw(src)?.let { raw ->
+                                    ScanEngine.refine(src, raw)?.inset(QuadMath.INSET_REFINED) ?: raw.inset(QuadMath.INSET_COARSE)
+                                }
+                            } finally {
+                                src.recycle()
+                            }
+                        }
                     }
                     if (found != null) quad = found else toast(ctx, "No edges found — drag the corners")
                 }
@@ -176,7 +184,11 @@ fun CropScreen(nav: Nav, index: Int) {
         }
         Button(
             onClick = {
-                ScanSession.update(index) { it.copy(quad = quad) }
+                if (quad != page.quad) {
+                    // New corners: the old tilt no longer applies. It is measured again in the background.
+                    ScanSession.update(ctx, index) { it.copy(quad = quad, skew = 0f) }
+                    ScanIntake.remeasure(ctx, page.id)
+                }
                 nav.pop()
             },
             colors = ButtonDefaults.buttonColors(containerColor = WizYellow, contentColor = WizInk),

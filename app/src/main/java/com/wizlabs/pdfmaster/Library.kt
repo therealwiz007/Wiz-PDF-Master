@@ -26,7 +26,9 @@ class App : Application() {
             ScanEngine.ready = OpenCVLoader.initLocal()
             PDFBoxResourceLoader.init(this@App)
         }
+        Prefs.migrate(this)
         Library.load(this)
+        ScanSession.init(this)
     }
 
     companion object {
@@ -162,9 +164,24 @@ fun queryNameSize(ctx: Context, uri: Uri): Pair<String, Long> {
 object Prefs {
     private fun sp(ctx: Context) = ctx.getSharedPreferences("prefs", Context.MODE_PRIVATE)
 
+    /**
+     * Run once at start-up. New installs start with the "Auto" look; phones that already used the
+     * app keep what they had (Magic, unless they chose something else).
+     */
+    fun migrate(ctx: Context) {
+        val p = sp(ctx)
+        if (p.contains("filter")) return
+        val usedBefore = p.all.isNotEmpty() || File(ctx.filesDir, "library.json").exists()
+        p.edit().putString("filter", (if (usedBefore) ScanFilter.MAGIC else ScanFilter.AUTO).name).apply()
+    }
+
     fun defaultFilter(ctx: Context) = runCatching {
         ScanFilter.valueOf(sp(ctx).getString("filter", ScanFilter.MAGIC.name)!!)
     }.getOrDefault(ScanFilter.MAGIC)
+
+    /** Turn pages the right way up and level tilted text when a page is captured. */
+    fun autoRotate(ctx: Context) = sp(ctx).getBoolean("autorotate", true)
+    fun setAutoRotate(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("autorotate", v).apply()
     fun setDefaultFilter(ctx: Context, f: ScanFilter) = sp(ctx).edit().putString("filter", f.name).apply()
 
     fun autoCapture(ctx: Context) = sp(ctx).getBoolean("auto", true)
