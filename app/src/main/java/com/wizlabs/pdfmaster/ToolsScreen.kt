@@ -213,15 +213,15 @@ fun MergeScreen(nav: Nav) {
     val scope = rememberCoroutineScope()
     val items = remember { mutableStateListOf<PdfOps.MergeItem>() }
     var pickLibrary by remember { mutableStateOf(false) }
-    var locked by remember { mutableStateOf<PdfRef.External?>(null) }     // waiting for its password
+    var locked by remember { mutableStateOf<PdfRef?>(null) }     // waiting for its password
     var wrong by remember { mutableStateOf(false) }
-    val queue = remember { mutableStateListOf<PdfRef.External>() }
+    val queue = remember { mutableStateListOf<PdfRef>() }
     var askName by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf<Busy?>(null) }
     var job by remember { mutableStateOf<Job?>(null) }
 
     /** Find the page count; a locked file is parked until the user types its password. */
-    suspend fun add(ref: PdfRef.External, password: String?): Boolean = try {
+    suspend fun add(ref: PdfRef, password: String?): Boolean = try {
         val src = PdfSource.open(ctx, ref, password)
         val n = src.pageCount
         src.close()
@@ -320,9 +320,11 @@ fun MergeScreen(nav: Nav) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    // Added in the order they were ticked.
-                    chosen.mapNotNull { id -> Library.doc(id) }.forEach { items += PdfOps.MergeItem(PdfRef.Local(it.id, it.name), it.name, it.pages) }
+                    // Added in the order they were ticked. They go through the same check as files from
+                    // the phone, so a locked scan asks for its password instead of failing the merge.
+                    val refs = chosen.mapNotNull { id -> Library.doc(id) }.map { PdfRef.Local(it.id, it.name) }
                     pickLibrary = false
+                    scope.launch { queue += refs; drain() }
                 }) { Text("Add", color = WizYellow, fontWeight = FontWeight.Bold) }
             },
             dismissButton = { TextButton(onClick = { pickLibrary = false }) { Text("Cancel", color = WizMuted) } },

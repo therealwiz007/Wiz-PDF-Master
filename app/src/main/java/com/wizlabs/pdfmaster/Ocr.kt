@@ -75,7 +75,9 @@ object Ocr {
                 val readings = arrayListOf(lang to text)
                 for (l in more) {
                     try {
-                        readings += l to client(l).process(image).await()
+                        // A component that is still downloading can leave the task waiting forever.
+                        kotlinx.coroutines.withTimeoutOrNull(20_000) { client(l).process(image).await() }
+                            ?.let { readings += l to it }
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
                     } catch (_: Throwable) {

@@ -70,6 +70,7 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -103,6 +104,12 @@ fun QrScreen(nav: Nav) {
     LaunchedEffect(Unit) { if (!granted) ask.launch(Manifest.permission.CAMERA) }
     DisposableEffect(Unit) { onDispose { runCatching { scanner?.close() } } }
 
+    // A missing Play-services reader doesn't fail its tasks: they wait for the download and never
+    // complete, so the camera would sit silently. Check up front instead.
+    LaunchedEffect(scanner) {
+        if (scanner != null && !PlayModules.available(ctx.applicationContext, scanner)) unavailable = true
+    }
+
     // The reader can't be used: ask Play services for it once, and keep showing where that stands.
     LaunchedEffect(unavailable) {
         if (unavailable && scanner != null && module == null) {
@@ -114,7 +121,9 @@ fun QrScreen(nav: Nav) {
     val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null && scanner != null) scope.launch {
             try {
-                val found = hitOf(scanner.process(InputImage.fromFilePath(ctx, uri)).await())
+                // Without the reader the task would wait for the download forever.
+                if (unavailable) { toast(ctx, "The code reader isn't ready on this phone yet"); return@launch }
+                val found = withTimeoutOrNull(15_000) { hitOf(scanner.process(InputImage.fromFilePath(ctx, uri)).await()) }
                 if (found != null) hit = found else toast(ctx, "No QR code or barcode found in that picture")
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -126,7 +135,7 @@ fun QrScreen(nav: Nav) {
     }
 
     Box(Modifier.fillMaxSize().background(WizBar)) {
-        if (granted && scanner != null) QrCamera(
+        if (granted && scanner != null && !unavailable) QrCamera(
             scanner, torch, paused = hit != null,
             onHit = { if (hit == null) hit = it },
             onFailure = { unavailable = true },
