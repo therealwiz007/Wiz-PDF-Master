@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Wiz PDF Master</string>
+    <string name="whats_new_title">What\'s new in %1$s</string>
+    <string name="whats_new_body">• PDF tools: merge, split, reorder, rotate and delete pages\n• Compress a PDF to the size you need\n• Sharper scans with focus and glare hints\n• Black &amp; white scans are much smaller</string>
 </resources>

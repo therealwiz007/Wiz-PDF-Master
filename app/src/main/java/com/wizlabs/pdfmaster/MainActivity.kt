@@ -36,6 +36,15 @@ sealed interface Screen {
     data class Crop(val index: Int) : Screen
     data class Viewer(val ref: PdfRef, val sign: Boolean = false) : Screen
     data object Settings : Screen
+    data object Tools : Screen
+    data object Merge : Screen
+    /** Page grid: reorder, rotate, delete, extract; [split] opens the split dialog straight away. */
+    data class Pages(val ref: PdfRef, val password: String? = null, val split: Boolean = false) : Screen {
+        override fun toString() = "Pages(${ref.key}, $split)"       // never put the password in a route name
+    }
+    data class Compress(val ref: PdfRef, val password: String? = null) : Screen {
+        override fun toString() = "Compress(${ref.key})"
+    }
 }
 
 class Nav {
@@ -147,6 +156,10 @@ fun AppRoot(nav: Nav) {
                 is Screen.Crop -> CropScreen(nav, screen.index)
                 is Screen.Viewer -> ViewerScreen(nav, screen.ref, screen.sign)
                 Screen.Settings -> SettingsScreen(nav)
+                Screen.Tools -> ToolsScreen(nav)
+                Screen.Merge -> MergeScreen(nav)
+                is Screen.Pages -> PagesScreen(nav, screen.ref, screen.password, screen.split)
+                is Screen.Compress -> CompressScreen(nav, screen.ref, screen.password)
             }
           }
         }

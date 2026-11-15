@@ -11,16 +11,17 @@ import org.opencv.android.Utils
 import org.opencv.core.Core
 import org.opencv.core.CvType
 import org.opencv.core.Mat
+import org.opencv.core.MatOfDouble
 import org.opencv.core.MatOfPoint
 import org.opencv.core.MatOfPoint2f
 import org.opencv.core.Point
+import org.opencv.core.Scalar
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.roundToInt
 
 enum class ScanFilter(val label: String) {
     ORIGINAL("Original"), MAGIC("Magic"), GRAY("Grayscale"), BW("B & W"), LIGHTEN("No shadow")
@@ -52,16 +53,29 @@ object ScanEngine {
         try {
             Utils.bitmapToMat(small, rgba)
             Imgproc.cvtColor(rgba, gray, Imgproc.COLOR_RGBA2GRAY)
-            Imgproc.GaussianBlur(gray, gray, Size(5.0, 5.0), 0.0)
-            val minArea = w * h * 0.12
-            return (findQuad(edgesCanny(gray), w, h, minArea)
-                ?: findQuad(edgesThreshold(gray), w, h, minArea)
-                ?: findQuadFromSaturation(rgba, w, h, minArea))?.inset(0.012f)
+            return detectGray(gray) { saturationOf(rgba) }
         } catch (_: Throwable) {
             return null
         } finally {
             rgba.release(); gray.release()
             if (small !== src) small.recycle()
+        }
+    }
+
+    /**
+     * Find the outline on a small, unblurred gray frame (the camera's Y plane works as is).
+     * [saturation] is only asked for when the brightness-based passes find nothing; it returns a
+     * single-channel "how colourful" image of any size, which this function releases.
+     */
+    fun detectGray(gray: Mat, saturation: () -> Mat?): Quad? {
+        val blurred = Mat()
+        try {
+            Imgproc.GaussianBlur(gray, blurred, Size(5.0, 5.0), 0.0)
+            return (findQuad(edgesCanny(blurred))
+                ?: findQuad(edgesThreshold(blurred))
+                ?: saturation()?.let { findQuadFromSaturation(it) })?.inset(0.012f)
+        } finally {
+            blurred.release()
         }
     }
 
@@ -87,27 +101,39 @@ object ScanEngine {
         return bin
     }
 
-    /** White paper on a coloured desk: low saturation + high brightness stands out. */
-    private fun findQuadFromSaturation(rgba: Mat, w: Int, h: Int, minArea: Double): Quad? {
+    /** The S channel of an RGBA image. */
+    private fun saturationOf(rgba: Mat): Mat {
         val hsv = Mat(); val rgb = Mat()
         val channels = ArrayList<Mat>()
         try {
             Imgproc.cvtColor(rgba, rgb, Imgproc.COLOR_RGBA2RGB)
             Imgproc.cvtColor(rgb, hsv, Imgproc.COLOR_RGB2HSV)
             Core.split(hsv, channels)
-            val s = channels[1]
-            val inv = Mat()
-            Core.bitwise_not(s, inv)
-            Imgproc.GaussianBlur(inv, inv, Size(5.0, 5.0), 0.0)
-            Imgproc.threshold(inv, inv, 0.0, 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
-            return findQuad(inv, w, h, minArea)
+            return channels.removeAt(1)
         } finally {
             hsv.release(); rgb.release(); channels.forEach { it.release() }
         }
     }
 
+    /** White paper on a coloured desk: low saturation stands out. Consumes (releases) [s]. */
+    private fun findQuadFromSaturation(s: Mat): Quad? {
+        val inv = Mat()
+        try {
+            Core.bitwise_not(s, inv)
+            Imgproc.GaussianBlur(inv, inv, Size(5.0, 5.0), 0.0)
+            Imgproc.threshold(inv, inv, 0.0, 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
+        } catch (t: Throwable) {
+            inv.release(); throw t
+        } finally {
+            s.release()
+        }
+        return findQuad(inv)
+    }
+
     /** Consumes (releases) [edges]. */
-    private fun findQuad(edges: Mat, w: Int, h: Int, minArea: Double): Quad? {
+    private fun findQuad(edges: Mat): Quad? {
+        val w = edges.cols(); val h = edges.rows()
+        val minArea = w * h * 0.12
         val contours = ArrayList<MatOfPoint>()
         val hierarchy = Mat()
         try {
@@ -144,6 +170,77 @@ object ScanEngine {
         }
     }
 
+    // ---- Quality checks ------------------------------------------------------------------
+
+    private fun fillQuad(mask: Mat, quad: Quad) {
+        val w = mask.cols(); val h = mask.rows()
+        val pts = MatOfPoint(*quad.points.map { Point(it.x * w.toDouble(), it.y * h.toDouble()) }.toTypedArray())
+        Imgproc.fillConvexPoly(mask, pts, Scalar(255.0))
+        pts.release()
+    }
+
+    /**
+     * Variance of the Laplacian inside [quad] on an unblurred gray image: high for crisp print,
+     * low when the picture is out of focus or shaken. The paper edge itself is left out.
+     */
+    fun sharpness(gray: Mat, quad: Quad): Double {
+        val lap = Mat(); val mask = Mat.zeros(gray.size(), CvType.CV_8UC1)
+        val mean = MatOfDouble(); val std = MatOfDouble()
+        try {
+            Imgproc.Laplacian(gray, lap, CvType.CV_16S)
+            fillQuad(mask, quad.inset(0.06f))
+            Core.meanStdDev(lap, mean, std, mask)
+            val s = std.get(0, 0)?.firstOrNull() ?: 0.0
+            return s * s
+        } catch (_: Throwable) {
+            return Double.MAX_VALUE      // can't tell: never block on it
+        } finally {
+            lap.release(); mask.release(); mean.release(); std.release()
+        }
+    }
+
+    /** [sharpness] of a decoded photo. */
+    fun sharpness(bmp: Bitmap, quad: Quad): Double {
+        if (!ensure()) return Double.MAX_VALUE
+        val rgba = Mat(); val gray = Mat()
+        try {
+            Utils.bitmapToMat(bmp, rgba)
+            Imgproc.cvtColor(rgba, gray, Imgproc.COLOR_RGBA2GRAY)
+            return sharpness(gray, quad)
+        } catch (_: Throwable) {
+            return Double.MAX_VALUE
+        } finally {
+            rgba.release(); gray.release()
+        }
+    }
+
+    /** Chroma level (see FrameAnalyzer) under which a blown-out pixel counts as a reflection. */
+    private const val GLARE_CHROMA = 30.0
+
+    /**
+     * Share of the page covered by glare: pixels that are blown out (brightness above 250) and
+     * colourless. [chroma] is a small single-channel "how colourful" image of the same frame.
+     */
+    fun glare(gray: Mat, chroma: Mat, quad: Quad): Float {
+        val g = Mat(); val bright = Mat(); val flat = Mat()
+        val mask = Mat.zeros(chroma.size(), CvType.CV_8UC1)
+        try {
+            Imgproc.resize(gray, g, chroma.size(), 0.0, 0.0, Imgproc.INTER_LINEAR)
+            Imgproc.threshold(g, bright, 250.0, 255.0, Imgproc.THRESH_BINARY)
+            Imgproc.threshold(chroma, flat, GLARE_CHROMA, 255.0, Imgproc.THRESH_BINARY_INV)
+            Core.bitwise_and(bright, flat, bright)
+            fillQuad(mask, quad.inset(0.03f))
+            val area = Core.countNonZero(mask)
+            if (area == 0) return 0f
+            Core.bitwise_and(bright, mask, bright)
+            return Core.countNonZero(bright) / area.toFloat()
+        } catch (_: Throwable) {
+            return 0f
+        } finally {
+            g.release(); bright.release(); flat.release(); mask.release()
+        }
+    }
+
     /** A quad hugging all four image borders is just the frame edge, not a document. */
     private fun touchesEverywhere(q: Quad): Boolean {
         val m = 0.01f
@@ -164,6 +261,8 @@ object ScanEngine {
 
     // ---- Correction ----------------------------------------------------------------------
 
+    private const val UNSHARP_AMOUNT = 0.6
+
     /** Perspective-correct [src] to the [quad] (normalised corners). */
     fun warp(src: Bitmap, quad: Quad): Bitmap {
         if (!ensure() || quad == Quad.FULL) return src.copy(Bitmap.Config.ARGB_8888, false)
@@ -177,8 +276,12 @@ object ScanEngine {
         try {
             Utils.bitmapToMat(src, s)
             val m = Imgproc.getPerspectiveTransform(srcPts, dstPts)
-            Imgproc.warpPerspective(s, d, m, Size(tw.toDouble(), th.toDouble()), Imgproc.INTER_LINEAR, Core.BORDER_REPLICATE)
+            Imgproc.warpPerspective(s, d, m, Size(tw.toDouble(), th.toDouble()), Imgproc.INTER_CUBIC, Core.BORDER_REPLICATE)
             m.release()
+            s.release()
+            // Light unsharp mask: brings back the crispness that resampling takes out of small print.
+            Imgproc.GaussianBlur(d, s, Size(0.0, 0.0), 1.0)
+            Core.addWeighted(d, 1.0 + UNSHARP_AMOUNT, s, -UNSHARP_AMOUNT, 0.0, d)
             val out = Bitmap.createBitmap(tw, th, Bitmap.Config.ARGB_8888)
             Utils.matToBitmap(d, out)
             return out
@@ -273,7 +376,7 @@ object ScanEngine {
         // out = c / bg * 255
         val cf = Mat(); val bf = Mat()
         c.convertTo(cf, CvType.CV_32F); bg.convertTo(bf, CvType.CV_32F)
-        Core.max(bf, org.opencv.core.Scalar(1.0), bf)
+        Core.max(bf, Scalar(1.0), bf)
         Core.divide(cf, bf, cf, 255.0)
         cf.convertTo(out, CvType.CV_8U)
         cf.release(); bf.release(); bg.release()
@@ -320,18 +423,31 @@ object ScanEngine {
         return Bitmap.createBitmap(src, 0, 0, src.width, src.height, m, true)
     }
 
+    /** Clockwise rotation recorded in a photo's EXIF data (camera JPEGs are stored unrotated). */
+    fun exifDegrees(f: File): Int = runCatching { ExifInterface(f.path).rotationDegrees }.getOrDefault(0)
+
+    /**
+     * Decode a photo upright, scaled so the long side is at most [maxSide]. Reads only as many
+     * pixels as needed (inSampleSize) and backs off to a smaller decode when memory is tight.
+     */
     fun decodeFile(f: File, maxSide: Int): Bitmap? {
         val b = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(f.path, b)
         if (b.outWidth <= 0) return null
         var sample = 1
         while (max(b.outWidth, b.outHeight) / (sample * 2) >= maxSide) sample *= 2
-        val raw = BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
-        val (w, h) = fitWithin(raw.width, raw.height, maxSide)
-        if (w == raw.width) return raw
-        val out = Bitmap.createScaledBitmap(raw, w, h, true)
-        if (out !== raw) raw.recycle()
-        return out
+        val degrees = exifDegrees(f)
+        repeat(3) {
+            var raw: Bitmap? = null
+            try {
+                raw = BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
+                return scaleAndRotate(raw, degrees, maxSide)
+            } catch (_: OutOfMemoryError) {
+                raw?.recycle()
+                sample *= 2
+            }
+        }
+        return null
     }
 
     fun saveJpeg(bmp: Bitmap, f: File, quality: Int = 92) {
@@ -343,7 +459,4 @@ object ScanEngine {
         val (w, h) = fitWithin(bmp.width, bmp.height, maxSide)
         return Bitmap.createScaledBitmap(bmp, w, h, true)
     }
-
-    @Suppress("unused")
-    fun px(v: Float) = v.roundToInt()
 }

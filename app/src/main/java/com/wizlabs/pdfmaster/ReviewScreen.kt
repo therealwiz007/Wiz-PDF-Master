@@ -83,6 +83,7 @@ fun ReviewScreen(nav: Nav) {
     var showSave by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf<PdfBuilder.Progress?>(null) }
     var saveJob by remember { mutableStateOf<Job?>(null) }
+    val blurDismissed = remember { androidx.compose.runtime.mutableStateListOf<String>() }
 
     if (pages.isEmpty()) {
         // Only navigate if Review is still on top; after saving we've already moved on to the viewer.
@@ -139,6 +140,18 @@ fun ReviewScreen(nav: Nav) {
 
         // Filters for the current page
         val page = pages[current]
+        if (page.blurry && page.id !in blurDismissed) Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Looks blurry —", style = MaterialTheme.typography.bodySmall, color = WizMuted)
+            TextButton(onClick = {
+                // Camera first, then drop the page, so an emptied review doesn't bounce home.
+                nav.push(Screen.Camera)
+                ScanSession.remove(ctx, current)
+            }) { Text("Retake?", color = WizYellow) }
+            TextButton(onClick = { blurDismissed.add(page.id) }) { Text("Keep", color = WizMuted) }
+        }
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),

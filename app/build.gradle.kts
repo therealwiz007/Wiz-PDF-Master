@@ -12,8 +12,8 @@ android {
         applicationId = "com.wizlabs.pdfmaster"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.2.0"
+        versionCode = 8
+        versionName = "1.3.0"
         // Ship only English resources (drops dozens of unused library translations).
         resourceConfigurations += listOf("en")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -93,6 +93,9 @@ dependencies {
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
     // Text recognition with the model bundled inside the APK (no download, no Play services model).
     implementation("com.google.mlkit:text-recognition:16.0.1")
+
+    // Asks the Play Store app (over IPC, no network permission) whether a newer version exists.
+    implementation("com.google.android.play:app-update-ktx:2.1.0")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation(composeBom)

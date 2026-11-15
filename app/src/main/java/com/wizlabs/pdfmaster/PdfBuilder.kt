@@ -56,7 +56,7 @@ object PdfBuilder {
                 } else null
                 if (!text?.words.isNullOrEmpty()) anyText = true
                 onProgress(Progress(i + 1, pages.size, "Writing"))
-                addImagePage(doc, bmp, text, pageSize, quality)
+                addImagePage(doc, bmp, text, pageSize, quality, bilevel = page.filter == ScanFilter.BW)
                 bmp.recycle()
             }
             doc.save(tmp)
@@ -68,9 +68,13 @@ object PdfBuilder {
         d
     }
 
-    private fun addImagePage(doc: PDDocument, bmp: Bitmap, ocr: OcrResult?, size: PageSize, quality: Int) {
-        val bytes = ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.JPEG, quality, it) }.toByteArray()
-        val img = JPEGFactory.createFromByteArray(doc, bytes)
+    private fun addImagePage(doc: PDDocument, bmp: Bitmap, ocr: OcrResult?, size: PageSize, quality: Int, bilevel: Boolean) {
+        // Black & white pages are pure ink-or-paper: store them as 1-bit fax-coded images, which is
+        // both sharper and several times smaller than a JPEG. Everything else stays JPEG.
+        val img = (if (bilevel) BilevelCodec.image(doc, bmp) else null) ?: run {
+            val bytes = ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.JPEG, quality, it) }.toByteArray()
+            JPEGFactory.createFromByteArray(doc, bytes)
+        }
         val landscape = bmp.width > bmp.height
         val rect = when (size) {
             PageSize.A4 -> if (landscape) PDRectangle(PDRectangle.A4.height, PDRectangle.A4.width) else PDRectangle.A4

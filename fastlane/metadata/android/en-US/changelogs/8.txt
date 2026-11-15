@@ -1,0 +1,8 @@
+New: PDF tools
+• Reorder, rotate, delete and extract pages of any PDF
+• Merge several PDFs into one, or split one by page ranges
+• Compress a PDF to a size you choose, with a size estimate first
+• Sharper scans: the camera focuses on the page before shooting and warns about blur and glare
+• Black & white scans are several times smaller
+• Pick many photos at once and turn them into a PDF
+• A small note on the home screen when an update is ready

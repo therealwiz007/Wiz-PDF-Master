@@ -68,6 +68,8 @@ import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.automirrored.outlined.CallSplit
+import androidx.compose.material.icons.outlined.Compress
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
@@ -149,12 +151,21 @@ private val InvertMatrix = ColorMatrix(
 
 @Composable
 fun ViewerScreen(nav: Nav, ref: PdfRef, startSigning: Boolean = false) {
+    PdfGate(nav, ref) { src -> ViewerContent(nav, src, startSigning) }
+}
+
+/**
+ * Opens [ref] (asking for the password when the file is locked) and shows [content] once it is
+ * readable. Shared by the viewer and the page tools; the source is closed when the screen leaves.
+ */
+@Composable
+fun PdfGate(nav: Nav, ref: PdfRef, initialPassword: String? = null, content: @Composable (PdfSource) -> Unit) {
     val ctx = LocalContext.current
     var source by remember(ref) { mutableStateOf<PdfSource?>(null) }
     var error by remember(ref) { mutableStateOf<String?>(null) }
     var needPassword by remember(ref) { mutableStateOf(false) }
     var wrongPassword by remember(ref) { mutableStateOf(false) }
-    var password by remember(ref) { mutableStateOf<String?>(null) }
+    var password by remember(ref) { mutableStateOf(initialPassword) }
 
     LaunchedEffect(ref, password) {
         error = null
@@ -180,7 +191,7 @@ fun ViewerScreen(nav: Nav, ref: PdfRef, startSigning: Boolean = false) {
 
     val src = source
     when {
-        src != null -> ViewerContent(nav, src, startSigning)
+        src != null -> content(src)
         needPassword -> PasswordPrompt(ref.title, wrongPassword, onCancel = { nav.pop() }) { password = it }
         error != null -> Column(
             Modifier.fillMaxSize().background(WizBg).statusBarsPadding().padding(28.dp),
@@ -202,7 +213,7 @@ fun ViewerScreen(nav: Nav, ref: PdfRef, startSigning: Boolean = false) {
 }
 
 @Composable
-private fun PasswordPrompt(title: String, wrong: Boolean, onCancel: () -> Unit, onSubmit: (String) -> Unit) {
+internal fun PasswordPrompt(title: String, wrong: Boolean, onCancel: () -> Unit, onSubmit: (String) -> Unit) {
     var pw by remember { mutableStateOf("") }
     Box(Modifier.fillMaxSize().background(WizBg))
     AlertDialog(
@@ -407,6 +418,15 @@ private fun ViewerContent(nav: Nav, src: PdfSource, startSigning: Boolean = fals
                                     textSheet = TextSheetState(visiblePage)
                                 }
                                 MenuItem("Go to page", Icons.Outlined.ShortText) { menu = false; showGoTo = true }
+                                MenuItem("Edit pages", Icons.Outlined.GridView) {
+                                    menu = false; nav.push(Screen.Pages(src.ref, src.password))
+                                }
+                                MenuItem("Split", Icons.AutoMirrored.Outlined.CallSplit) {
+                                    menu = false; nav.push(Screen.Pages(src.ref, src.password, split = true))
+                                }
+                                MenuItem("Compress", Icons.Outlined.Compress) {
+                                    menu = false; nav.push(Screen.Compress(src.ref, src.password))
+                                }
                                 MenuItem("Share", Icons.Outlined.Share) {
                                     menu = false
                                     when (val r = src.ref) {

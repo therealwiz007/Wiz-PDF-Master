@@ -242,7 +242,8 @@ class PdfSource private constructor(
 
         private fun decryptedCopy(ctx: Context, ref: PdfRef, password: String): File {
             com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(ctx)
-            val out = File(ctx.cacheDir, "unlocked/${ref.key.hashCode()}.pdf").apply { parentFile?.mkdirs() }
+            // A fresh name per open: two screens may hold the same locked file during a transition.
+            val out = File(ctx.cacheDir, "unlocked/${ref.key.hashCode()}-${System.nanoTime()}.pdf").apply { parentFile?.mkdirs() }
             val input = when (ref) {
                 is PdfRef.Local -> FileInputStream(Library.fileOf(ctx, ref.docId))
                 is PdfRef.External -> ctx.contentResolver.openInputStream(ref.uri) ?: error("Cannot open")

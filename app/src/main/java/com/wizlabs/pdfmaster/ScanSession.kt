@@ -19,6 +19,7 @@ data class ScanPage(
     val quad: Quad,
     val rotation: Int = 0,          // extra clockwise rotation applied after the warp
     val filter: ScanFilter,
+    val blurry: Boolean = false,    // the capture looked out of focus (hint only)
     val version: Int = 0            // bumps on every edit so previews refresh
 )
 
@@ -82,7 +83,16 @@ object ScanSession {
     }
 
     /** Full-quality page for the final PDF (not cached). */
-    fun render(page: ScanPage, maxSide: Int = ScanEngine.MAX_SIDE): Bitmap? {
+    fun render(page: ScanPage, maxSide: Int = ScanEngine.MAX_SIDE): Bitmap? = try {
+        renderOnce(page, maxSide)
+    } catch (_: OutOfMemoryError) {
+        // Low-RAM phone: drop cached previews and settle for a smaller page rather than failing.
+        previewCache.evictAll()
+        System.gc()
+        try { renderOnce(page, maxSide * 2 / 3) } catch (_: OutOfMemoryError) { null }
+    }
+
+    private fun renderOnce(page: ScanPage, maxSide: Int): Bitmap? {
         val src = ScanEngine.decodeFile(page.original, maxSide) ?: return null
         val warped = ScanEngine.warp(src, page.quad)
         src.recycle()

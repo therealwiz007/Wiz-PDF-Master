@@ -37,7 +37,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.AddToHomeScreen
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Compress
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
@@ -113,6 +116,7 @@ fun HomeScreen(nav: Nav) {
     var exportDoc by remember { mutableStateOf<Doc?>(null) }
     val listState = rememberLazyListState()
     val intro = rememberIntro()
+    var updateCard by remember { mutableStateOf(false) }
 
     val openPdf = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) openExternal(ctx, nav, uri)
@@ -187,7 +191,15 @@ fun HomeScreen(nav: Nav) {
                     )
                 }
                 Spacer(Modifier.height(12.dp))
-                SignTile(onClick = { openPdfToSign.launch(arrayOf("application/pdf")) }, modifier = Modifier.rise(intro, 2))
+                SlimTile(
+                    Icons.Outlined.Draw, "Sign a PDF", "Add your handwritten signature",
+                    onClick = { openPdfToSign.launch(arrayOf("application/pdf")) }, modifier = Modifier.rise(intro, 2)
+                )
+                Spacer(Modifier.height(10.dp))
+                SlimTile(
+                    Icons.Outlined.Build, "PDF tools", "Merge, split, compress, reorder pages",
+                    onClick = { nav.push(Screen.Tools) }, modifier = Modifier.rise(intro, 3)
+                )
             }
             item {
                 Spacer(Modifier.height(18.dp))
@@ -233,6 +245,8 @@ fun HomeScreen(nav: Nav) {
                         onShare = { sharePdf(ctx, shareUriFor(ctx, d), d.name) },
                         onRename = { renameDoc = d },
                         onSave = { exportDoc = d; saveTo.launch(safeFileName(d.name) + ".pdf") },
+                        onPages = { nav.push(Screen.Pages(PdfRef.Local(d.id, d.name))) },
+                        onCompress = { nav.push(Screen.Compress(PdfRef.Local(d.id, d.name))) },
                         onDelete = { deleteDoc = d }
                     )
                 }
@@ -264,6 +278,7 @@ fun HomeScreen(nav: Nav) {
             visible = showFab,
             enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut(),
             modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(20.dp)
+                .padding(bottom = if (updateCard) 64.dp else 0.dp)
         ) {
             ExtendedFloatingActionButton(
                 onClick = { ScanSession.clear(ctx); nav.push(Screen.Camera) },
@@ -273,7 +288,14 @@ fun HomeScreen(nav: Nav) {
                 text = { Text("Scan", fontWeight = FontWeight.Bold) }
             )
         }
+
+        // Home only: a slim, dismissible note when the Play Store has a newer version.
+        UpdateCard(
+            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal = 14.dp, vertical = 10.dp),
+            onVisible = { updateCard = it }
+        )
     }
+    WhatsNewSheet()
 
     importing?.let { (done, total) ->
         AlertDialog(
@@ -351,6 +373,8 @@ private fun DocRow(
     onShare: () -> Unit,
     onRename: () -> Unit,
     onSave: () -> Unit,
+    onPages: () -> Unit,
+    onCompress: () -> Unit,
     onDelete: () -> Unit
 ) {
     val ctx = LocalContext.current
@@ -390,6 +414,8 @@ private fun DocRow(
                     MenuItem("Share", Icons.Outlined.Share) { menu = false; onShare() }
                     MenuItem("Save to device", Icons.Outlined.Save) { menu = false; onSave() }
                     MenuItem("Rename", Icons.Outlined.DriveFileRenameOutline) { menu = false; onRename() }
+                    MenuItem("Edit pages", Icons.Outlined.GridView) { menu = false; onPages() }
+                    MenuItem("Compress", Icons.Outlined.Compress) { menu = false; onCompress() }
                     MenuItem("Add to home screen", Icons.Outlined.AddToHomeScreen) {
                         menu = false
                         if (!HomeShortcuts.pin(ctx, PdfRef.Local(d.id, d.name), thumb)) toast(ctx, "Your home screen app doesn't support shortcuts")
@@ -482,7 +508,8 @@ suspend fun importImages(ctx: Context, uris: List<Uri>, onProgress: (Int) -> Uni
     ScanEngine.ensure()
     val filter = Prefs.defaultFilter(ctx)
     uris.forEachIndexed { i, uri ->
-        val bmp = ScanEngine.decodeOriented(ctx, uri)
+        // decodeOriented returns null when memory runs out: try once more at half the size.
+        val bmp = ScanEngine.decodeOriented(ctx, uri) ?: ScanEngine.decodeOriented(ctx, uri, ScanEngine.MAX_SIDE / 2)
         if (bmp != null) {
             val f = File(ScanSession.dir(ctx), "${System.nanoTime()}.jpg")
             ScanEngine.saveJpeg(bmp, f)
@@ -495,26 +522,26 @@ suspend fun importImages(ctx: Context, uris: List<Uri>, onProgress: (Int) -> Uni
 }
 
 
-/** Slim full-width "Sign a PDF" row under the main tiles. */
+/** Slim full-width row under the main tiles ("Sign a PDF", "PDF tools"). */
 @Composable
-private fun SignTile(onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun SlimTile(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val tick = rememberTick()
     Surface(
         onClick = { tick(); onClick() },
         shape = RoundedCornerShape(18.dp),
         color = WizPanel,
-        border = androidx.compose.foundation.BorderStroke(1.dp, WizLine),
+        border = BorderStroke(1.dp, WizLine),
         modifier = modifier.fillMaxWidth().pressScale()
     ) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(WizYellow.copy(alpha = .14f)),
                 contentAlignment = Alignment.Center
-            ) { Icon(Icons.Outlined.Draw, null, tint = WizYellow, modifier = Modifier.size(20.dp)) }
+            ) { Icon(icon, null, tint = WizYellow, modifier = Modifier.size(20.dp)) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("Sign a PDF", style = MaterialTheme.typography.titleSmall)
-                Text("Add your handwritten signature", style = MaterialTheme.typography.bodySmall, color = WizMuted)
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = WizMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, tint = WizMuted)
         }
