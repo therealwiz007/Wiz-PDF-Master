@@ -85,6 +85,10 @@ fun ReviewScreen(nav: Nav) {
     var progress by remember { mutableStateOf<PdfBuilder.Progress?>(null) }
     var saveJob by remember { mutableStateOf<Job?>(null) }
     val blurDismissed = remember { androidx.compose.runtime.mutableStateListOf<String>() }
+    val starter = rememberScanStarter(nav)
+    var askLanguages by remember { mutableStateOf(false) }
+    var curveBusy by remember { mutableStateOf(false) }
+    val curveOffered = remember { CurveFlatten.supported(ctx) }
 
     if (pages.isEmpty()) {
         // Only navigate if Review is still on top; after saving we've already moved on to the viewer.
@@ -114,7 +118,7 @@ fun ReviewScreen(nav: Nav) {
                 Text("Review", style = MaterialTheme.typography.titleMedium)
                 Text("Page ${current + 1} of ${pages.size}", style = MaterialTheme.typography.bodySmall, color = WizMuted)
             }
-            TextButton(onClick = { nav.push(Screen.Camera) }) {
+            TextButton(onClick = { starter.scan(append = true) }) {
                 Icon(Icons.Outlined.Add, null, tint = WizYellow); Spacer(Modifier.width(4.dp)); Text("Add page", color = WizYellow)
             }
         }
@@ -163,6 +167,16 @@ fun ReviewScreen(nav: Nav) {
                 val label = if (f == ScanFilter.AUTO && page.filter == f && page.autoPick != null) "Auto · ${page.autoPick.label}" else f.label
                 WizChip(label, page.filter == f, { ScanSession.update(ctx, current) { it.copy(filter = f) } })
             }
+            if (curveOffered && !idCard) WizChip(if (curveBusy) "Measuring…" else "Flatten curve (Beta)", page.curve, {
+                if (page.curve) ScanSession.updateById(ctx, page.id) { it.copy(curve = false) }
+                else if (!curveBusy) scope.launch {
+                    curveBusy = true
+                    val found = CurveFlatten.prepare(page)
+                    curveBusy = false
+                    if (found) ScanSession.updateById(ctx, page.id) { it.copy(curve = true) }
+                    else toast(ctx, "No clear bend found on this page, so it stays as it is")
+                }
+            })
             TextButton(onClick = {
                 val f = page.filter
                 pages.indices.forEach { idx -> if (pages[idx].filter != f) ScanSession.update(ctx, idx) { it.copy(filter = f) } }
@@ -212,7 +226,7 @@ fun ReviewScreen(nav: Nav) {
             }
             item {
                 Surface(
-                    onClick = { nav.push(Screen.Camera) },
+                    onClick = { starter.scan(append = true) },
                     shape = RoundedCornerShape(8.dp), color = WizPanel,
                     border = BorderStroke(1.dp, WizLine),
                     modifier = Modifier.size(width = 52.dp, height = 68.dp)
@@ -221,7 +235,8 @@ fun ReviewScreen(nav: Nav) {
         }
 
         Button(
-            onClick = { showSave = true },
+            // Asked once, before the first save that may read text: which scripts to look for.
+            onClick = { if (!idCard && !Prefs.ocrLangsAsked(ctx)) askLanguages = true else showSave = true },
             colors = ButtonDefaults.buttonColors(containerColor = WizYellow, contentColor = WizInk),
             shape = RoundedCornerShape(18.dp),
             contentPadding = PaddingValues(vertical = 16.dp),
@@ -236,6 +251,10 @@ fun ReviewScreen(nav: Nav) {
             )
         }
     }
+
+    ScanStarterUi(starter)
+    if (askLanguages) OcrLanguageSheet { askLanguages = false; showSave = true }
+    AddedNotice()
 
     if (showSave) SaveDialog(
         idCard = idCard,
@@ -352,4 +371,29 @@ private fun SaveDialog(idCard: Boolean, onDismiss: () -> Unit, onSave: (String, 
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = WizMuted) } },
         containerColor = WizPanel
     )
+}
+
+/** "3 pages added": slides in from the top once after Google's scanner hands its pages over. */
+@Composable
+private fun AddedNotice() {
+    val n = ScanNotice.added.value
+    var shown by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(n) {
+        if (n != null) { shown = n; ScanNotice.added.value = null; kotlinx.coroutines.delay(2400); shown = null }
+    }
+    Box(Modifier.fillMaxSize().statusBarsPadding().padding(top = 54.dp), contentAlignment = Alignment.TopCenter) {
+        androidx.compose.animation.AnimatedVisibility(
+            visible = shown != null,
+            enter = androidx.compose.animation.slideInVertically { -it * 2 } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutVertically { -it * 2 } + androidx.compose.animation.fadeOut()
+        ) {
+            val count = shown ?: 0
+            Surface(shape = RoundedCornerShape(50), color = WizYellow, contentColor = WizInk, shadowElevation = 6.dp) {
+                Text(
+                    "$count page${if (count == 1) "" else "s"} added",
+                    style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+        }
+    }
 }

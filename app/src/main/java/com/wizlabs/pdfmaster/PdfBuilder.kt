@@ -24,6 +24,10 @@ object PdfBuilder {
 
     data class Progress(val page: Int, val total: Int, val stage: String)
 
+    /**
+     * Build the PDF. Words in other scripts are written with a font borrowed from the phone; if a
+     * phone's font turns out to be one PDFBox can't embed, the PDF is built again without them.
+     */
     suspend fun build(
         ctx: Context,
         pages: List<ScanPage>,
@@ -33,6 +37,28 @@ object PdfBuilder {
         quality: Int = 82,
         idCard: Boolean = false,
         onProgress: (Progress) -> Unit
+    ): Doc {
+        val langs = if (ocr) Prefs.ocrLangs(ctx) else setOf(OcrLang.LATIN)
+        return try {
+            buildOnce(ctx, pages, name, ocr, langs, pageSize, quality, idCard, unicode = true, onProgress)
+        } catch (e: UnicodeFontFailure) {
+            buildOnce(ctx, pages, name, ocr, langs, pageSize, quality, idCard, unicode = false, onProgress)
+        }
+    }
+
+    private class UnicodeFontFailure(cause: Throwable) : Exception(cause)
+
+    private suspend fun buildOnce(
+        ctx: Context,
+        pages: List<ScanPage>,
+        name: String,
+        ocr: Boolean,
+        langs: Set<OcrLang>,
+        pageSize: PageSize,
+        quality: Int,
+        idCard: Boolean,
+        unicode: Boolean,
+        onProgress: (Progress) -> Unit
     ): Doc = withContext(Dispatchers.Default) {
         com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(ctx)
         val id = Library.newId()
@@ -41,6 +67,7 @@ object PdfBuilder {
         var anyText = false
         var sheets = 0
         PDDocument().use { doc ->
+            val fonts = if (unicode) UnicodeFonts(doc) else null
             doc.documentInformation = PDDocumentInformation().apply {
                 title = name
                 creator = "Wiz PDF Master"
@@ -71,7 +98,7 @@ object PdfBuilder {
                         if (ocr && text == null) {
                             onProgress(Progress(i + 1, pages.size, "Reading text"))
                             // Text is read from the gray page, never from the black & white one.
-                            text = runCatching { Ocr.recognize(base, flatten = true) }.getOrNull()
+                            text = runCatching { Ocr.recognize(base, flatten = true, langs = langs) }.getOrNull()
                         }
                         ScanEngine.filter(base, l)
                     } finally {
@@ -81,12 +108,17 @@ object PdfBuilder {
                 if (sheets == 0) ScanEngine.saveJpeg(ScanEngine.thumb(bmp, 420), Library.thumbOf(ctx, id), 85)
                 if (!text?.words.isNullOrEmpty()) anyText = true
                 onProgress(Progress(i + 1, pages.size, "Writing"))
-                addImagePage(doc, bmp, text, pageSize, quality, bilevel = look == ScanFilter.BW)
+                addImagePage(doc, bmp, text, pageSize, quality, bilevel = look == ScanFilter.BW, fonts = fonts)
                 bmp.recycle()
                 sheets++
             }
             if (sheets == 0) throw java.io.IOException("No page could be prepared")
-            doc.save(tmp)
+            try {
+                doc.save(tmp)
+            } catch (e: Exception) {
+                tmp.delete()
+                if (fonts?.used == true) throw UnicodeFontFailure(e) else throw e
+            }
         }
         if (!tmp.renameTo(out)) { tmp.copyTo(out, overwrite = true); tmp.delete() }
         val now = System.currentTimeMillis()
@@ -135,7 +167,7 @@ object PdfBuilder {
         }
     }
 
-    private fun addImagePage(doc: PDDocument, bmp: Bitmap, ocr: OcrResult?, size: PageSize, quality: Int, bilevel: Boolean) {
+    private fun addImagePage(doc: PDDocument, bmp: Bitmap, ocr: OcrResult?, size: PageSize, quality: Int, bilevel: Boolean, fonts: UnicodeFonts? = null) {
         // Black & white pages are pure ink-or-paper: store them as 1-bit fax-coded images, which is
         // both sharper and several times smaller than a JPEG. Everything else stays JPEG.
         val img = (if (bilevel) BilevelCodec.image(doc, bmp) else null) ?: run {
@@ -162,28 +194,35 @@ object PdfBuilder {
         PDPageContentStream(doc, page).use { cs ->
             cs.drawImage(img, ox, oy, dw, dh)
             // The text may have been read on a differently sized copy of the page.
-            if (ocr != null && ocr.words.isNotEmpty()) writeInvisibleText(cs, ocr, ox, oy, scale * bmp.width / ocr.width)
+            if (ocr != null && ocr.words.isNotEmpty()) writeInvisibleText(cs, ocr, ox, oy, scale * bmp.width / ocr.width, fonts)
         }
     }
 
-    /** Lay each recognised word exactly over its pixels, rendered invisible, so search/copy work. */
-    private fun writeInvisibleText(cs: PDPageContentStream, ocr: OcrResult, ox: Float, oy: Float, scale: Float) {
-        val font = PDType1Font.HELVETICA
+    /**
+     * Lay each recognised word exactly over its pixels, rendered invisible, so search/copy work.
+     * Latin words use Helvetica as before; Devanagari and CJK words use a font from the phone when
+     * it has one ([fonts]), and are left out of the layer when it has none.
+     */
+    private fun writeInvisibleText(cs: PDPageContentStream, ocr: OcrResult, ox: Float, oy: Float, scale: Float, fonts: UnicodeFonts?) {
+        val helvetica = PDType1Font.HELVETICA
         cs.beginText()
         cs.setRenderingMode(RenderingMode.NEITHER)
         for (w in ocr.words) {
-            val t = pdfSafe(w.text).trim()
+            val script = OcrLangs.scriptOf(w.text)
+            val font = if (script == Script.LATIN) helvetica else fonts?.font(script)
+            val t = (if (font === helvetica || font == null) pdfSafe(w.text) else w.text.filter { !it.isISOControl() }).trim()
             if (t.isEmpty()) continue
             val bw = w.box.width() * scale
             val bh = w.box.height() * scale
             if (bw <= 0f || bh <= 0f) continue
             val fontSize = (bh * 0.92f).coerceIn(1f, 300f)
-            val tw = runCatching { font.getStringWidth(t) / 1000f * fontSize }.getOrDefault(0f)
+            val use = font ?: helvetica
+            val tw = runCatching { use.getStringWidth(t) / 1000f * fontSize }.getOrDefault(0f)
             if (tw <= 0f) continue
             val x = ox + w.box.left * scale
             val y = oy + (ocr.height - w.box.bottom) * scale + bh * 0.18f
             runCatching {
-                cs.setFont(font, fontSize)
+                cs.setFont(use, fontSize)
                 cs.setHorizontalScaling((bw / tw * 100f).coerceIn(10f, 1000f))
                 cs.setTextMatrix(Matrix.getTranslateInstance(x, y))
                 cs.showText(t)

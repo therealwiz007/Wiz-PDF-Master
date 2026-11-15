@@ -216,6 +216,59 @@ object PdfOps {
     }
 
     /**
+     * Open the PDF, let [change] alter it in place (stamp, annotate, fill in) and save the result
+     * to the library as [name], or over the library document [replaceDocId].
+     */
+    suspend fun edit(
+        ctx: Context,
+        ref: PdfRef,
+        password: String?,
+        name: String,
+        replaceDocId: String? = null,
+        change: (PDDocument) -> Unit
+    ): Doc = withContext(Dispatchers.IO) {
+        sweep(ctx)
+        val src = sourceFile(ctx, ref)
+        val old = replaceDocId?.let { Library.doc(it) }
+        val id = old?.id ?: Library.newId()
+        val out = Library.fileOf(ctx, id)
+        val part = File(out.path + ".part")
+        try {
+            requireSpace(ctx, src.file.length() * 2)
+            var pages = 0
+            var searchable = false
+            load(ctx, src.file, password).use { doc ->
+                checkEditable(doc)
+                change(doc)
+                pages = doc.numberOfPages
+                searchable = hasText(doc)
+                keepSecurity(doc, password)
+                coroutineContext.ensureActive()
+                doc.save(part)
+            }
+            moveInto(part, out)
+            makeThumb(ctx, out, id, password)
+            val now = System.currentTimeMillis()
+            val d = Doc(id, old?.name ?: name, pages, old?.created ?: now, now, out.length(), searchable)
+            Library.add(d)
+            d
+        } catch (e: java.io.IOException) {
+            throw OpError("Couldn't save the PDF. Check free storage and try again.")
+        } catch (e: OutOfMemoryError) {
+            throw OpError("This PDF is too large for this phone's memory.")
+        } finally {
+            part.delete()
+            src.done()
+        }
+    }
+
+    /** The name a document goes by in titles and new file names. */
+    fun baseName(ref: PdfRef): String = when (ref) {
+        is PdfRef.Local -> Library.doc(ref.docId)?.name ?: ref.title
+        is PdfRef.External -> ref.title.removeSuffix(".pdf").removeSuffix(".PDF")
+    }
+
+    /**
      * A password to put on a PDF. Without an [ownerPassword], a file with limits gets a random one:
      * the limits then hold for good, because nobody can open it "as owner" to lift them.
      */

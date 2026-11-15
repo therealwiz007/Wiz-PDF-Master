@@ -10,7 +10,8 @@ data class DraftPage(
     val blurry: Boolean = false,
     val skew: Float = 0f,
     val autoPick: String? = null,
-    val card: Boolean = false
+    val card: Boolean = false,
+    val curve: Boolean = false
 )
 
 /** An unfinished scan: enough to pick it up again after the app was closed or killed. */
@@ -40,6 +41,7 @@ object DraftCodec {
             append('\t').append(p.skew)
             append('\t').append(p.autoPick?.let { clean(it) } ?: "-")
             append('\t').append(if (p.card) 1 else 0)
+            append('\t').append(if (p.curve) 1 else 0)
             append('\n')
         }
         append("end\t").append(d.pages.size).append('\n')
@@ -69,7 +71,8 @@ object DraftCodec {
                         blurry = f[13] == "1",
                         skew = f[14].toFloatOrNull()?.takeIf { !it.isNaN() } ?: 0f,
                         autoPick = f[15].takeIf { it != "-" },
-                        card = f[16] == "1"
+                        card = f[16] == "1",
+                        curve = f.getOrNull(17) == "1"      // added in 1.5: older drafts have no such field
                     )
                 }
             }

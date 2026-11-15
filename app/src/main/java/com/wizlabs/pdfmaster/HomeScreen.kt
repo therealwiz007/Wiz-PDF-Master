@@ -1,5 +1,8 @@
 package com.wizlabs.pdfmaster
 
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.combinedClickable
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
@@ -117,6 +120,12 @@ fun HomeScreen(nav: Nav) {
     val listState = rememberLazyListState()
     val intro = rememberIntro()
     var updateCard by remember { mutableStateOf(false) }
+    val starter = rememberScanStarter(nav)
+    // Batch rename: long-press a scan to start picking several.
+    var picked by remember { mutableStateOf(setOf<String>()) }
+    var batchRename by remember { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(enabled = picked.isNotEmpty()) { picked = emptySet() }
+    LaunchedEffect(Unit) { SmartScanner.warmUp(ctx) }
 
     val openPdf = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) openExternal(ctx, nav, uri)
@@ -136,7 +145,6 @@ fun HomeScreen(nav: Nav) {
     }
     val pickImages = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(50)) { uris ->
         if (uris.isNotEmpty()) scope.launch {
-            ScanSession.clear(ctx)
             importing = 0 to uris.size
             importImages(ctx, uris) { done -> importing = done to uris.size }
             importing = null
@@ -202,12 +210,12 @@ fun HomeScreen(nav: Nav) {
             }
             item {
                 Spacer(Modifier.height(10.dp))
-                ScanHero(onClick = { ScanSession.clear(ctx); nav.push(Screen.Camera) }, modifier = Modifier.rise(intro, 1))
+                ScanHero(onClick = { starter.scan() }, modifier = Modifier.rise(intro, 1))
                 Spacer(Modifier.height(12.dp))
                 Row(Modifier.rise(intro, 2), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ActionTile(
                         Icons.Outlined.PhotoLibrary, "Import photos", "Gallery → PDF",
-                        onClick = { pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        onClick = { starter.fresh { pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } },
                         modifier = Modifier.weight(1f)
                     )
                     ActionTile(
@@ -223,7 +231,7 @@ fun HomeScreen(nav: Nav) {
                 )
                 Spacer(Modifier.height(10.dp))
                 SlimTile(
-                    Icons.Outlined.Build, "PDF tools", "Merge, split, compress, reorder pages",
+                    Icons.Outlined.Build, "PDF tools", "Merge, annotate, watermark, forms, QR",
                     onClick = { nav.push(Screen.Tools) }, modifier = Modifier.rise(intro, 3)
                 )
             }
@@ -267,6 +275,9 @@ fun HomeScreen(nav: Nav) {
                     DocRow(
                         d,
                         modifier = Modifier.animateItem().rise(intro, 5 + i),
+                        selecting = picked.isNotEmpty(),
+                        selected = d.id in picked,
+                        onToggle = { picked = if (d.id in picked) picked - d.id else picked + d.id },
                         onOpen = { nav.push(Screen.Viewer(PdfRef.Local(d.id, d.name))) },
                         onShare = { sharePdf(ctx, shareUriFor(ctx, d), d.name) },
                         onRename = { renameDoc = d },
@@ -301,18 +312,34 @@ fun HomeScreen(nav: Nav) {
         }
 
         AnimatedVisibility(
-            visible = showFab,
+            visible = showFab && picked.isEmpty(),
             enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut(),
             modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(20.dp)
                 .padding(bottom = if (updateCard) 64.dp else 0.dp)
         ) {
             ExtendedFloatingActionButton(
-                onClick = { ScanSession.clear(ctx); nav.push(Screen.Camera) },
+                onClick = { starter.scan() },
                 modifier = Modifier.pressScale(),
                 containerColor = WizYellow, contentColor = WizInk,
                 icon = { Icon(Icons.Outlined.DocumentScanner, null) },
                 text = { Text("Scan", fontWeight = FontWeight.Bold) }
             )
+        }
+
+        // Several scans picked: one bar with what can be done to all of them.
+        AnimatedVisibility(
+            visible = picked.isNotEmpty(),
+            enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            Surface(color = WizBar, contentColor = WizText, modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.navigationBarsPadding().padding(start = 18.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("${picked.size} selected", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { picked = shownDocs.map { it.id }.toSet() }) { Text("All", color = WizMuted) }
+                    TextButton(onClick = { picked = emptySet() }) { Text("Cancel", color = WizMuted) }
+                    TextButton(onClick = { batchRename = true }) { Text("Rename", color = WizYellow, fontWeight = FontWeight.Bold) }
+                }
+            }
         }
 
         // Home only: a slim, dismissible note when the Play Store has a newer version.
@@ -322,6 +349,13 @@ fun HomeScreen(nav: Nav) {
         )
     }
     WhatsNewSheet()
+    ScanStarterUi(starter)
+    if (batchRename) BatchRenameDialog(
+        docs.filter { it.id in picked },
+        others = docs.filter { it.id !in picked }.map { it.name }.toSet(),
+        onDismiss = { batchRename = false },
+        onApply = { names -> Library.renameAll(names); batchRename = false; picked = emptySet(); toast(ctx, "${names.size} renamed") }
+    )
 
     importing?.let { (done, total) ->
         AlertDialog(
@@ -391,10 +425,14 @@ private fun EmptyState(modifier: Modifier, icon: androidx.compose.ui.graphics.ve
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun DocRow(
     d: Doc,
     modifier: Modifier,
+    selecting: Boolean,
+    selected: Boolean,
+    onToggle: () -> Unit,
     onOpen: () -> Unit,
     onShare: () -> Unit,
     onRename: () -> Unit,
@@ -409,11 +447,11 @@ private fun DocRow(
     }
     var menu by remember { mutableStateOf(false) }
     Surface(
-        onClick = onOpen,
         shape = RoundedCornerShape(18.dp),
         color = WizPanel,
-        border = BorderStroke(1.dp, WizLine),
-        modifier = modifier.fillMaxWidth().padding(vertical = 5.dp).pressScale(0.98f)
+        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) WizYellow else WizLine),
+        modifier = modifier.fillMaxWidth().padding(vertical = 5.dp).pressScale(0.98f).clip(RoundedCornerShape(18.dp))
+            .combinedClickable(onClick = { if (selecting) onToggle() else onOpen() }, onLongClick = onToggle)
     ) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Thumb(thumb)
@@ -440,6 +478,7 @@ private fun DocRow(
                     MenuItem("Share", Icons.Outlined.Share) { menu = false; onShare() }
                     MenuItem("Save to device", Icons.Outlined.Save) { menu = false; onSave() }
                     MenuItem("Rename", Icons.Outlined.DriveFileRenameOutline) { menu = false; onRename() }
+                    MenuItem("Select several", Icons.Outlined.GridView) { menu = false; onToggle() }
                     MenuItem("Edit pages", Icons.Outlined.GridView) { menu = false; onPages() }
                     MenuItem("Compress", Icons.Outlined.Compress) { menu = false; onCompress() }
                     MenuItem("Add to home screen", Icons.Outlined.AddToHomeScreen) {

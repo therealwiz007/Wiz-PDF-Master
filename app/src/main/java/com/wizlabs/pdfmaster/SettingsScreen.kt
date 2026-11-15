@@ -52,6 +52,10 @@ fun SettingsScreen(nav: Nav) {
     var page by remember { mutableStateOf(Prefs.pageSize(ctx)) }
     var night by remember { mutableStateOf(Prefs.nightReading(ctx)) }
     var privacy by remember { mutableStateOf(false) }
+    val smartPossible = remember { PlayModules.playServices(ctx) }
+    var scanner by remember { mutableStateOf(SmartScanner.kind(ctx, idCard = false)) }
+    var cleanup by remember { mutableStateOf(Prefs.scannerCleanup(ctx)) }
+    var langs by remember { mutableStateOf(Prefs.ocrLangs(ctx)) }
     val docs by Library.docs.collectAsState()
     val intro = rememberIntro()
     val version = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "" }
@@ -62,6 +66,27 @@ fun SettingsScreen(nav: Nav) {
             Text("Settings", style = MaterialTheme.typography.titleLarge)
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).navigationBarsPadding()) {
+            SectionHeader("Scanner")
+            Card(Modifier.rise(intro, 1)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ScannerKind.entries.forEach { k ->
+                        WizChip(k.label, scanner == k, {
+                            if (k == ScannerKind.SMART && !smartPossible) toast(ctx, "This phone has no Google Play services, so the Smart scanner can't run here")
+                            else { scanner = k; Prefs.setScanner(ctx, k); if (k == ScannerKind.SMART) SmartScanner.warmUp(ctx) }
+                        })
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    if (scanner == ScannerKind.SMART) "Google's scanner (part of Google Play services on this phone) takes the photos; the pages then come back here for looks, text and saving. If it can't start, the Wiz scanner opens instead. ID cards always use the Wiz scanner."
+                    else "The app's own camera: live page outline, auto capture, batch and ID card modes.",
+                    style = MaterialTheme.typography.bodySmall, color = WizMuted
+                )
+                if (scanner == ScannerKind.SMART) {
+                    Spacer(Modifier.height(14.dp))
+                    ToggleRow("Extra clean-up", "Adds tools that remove stains, creases and fingers", cleanup) { cleanup = it; Prefs.setScannerCleanup(ctx, it); SmartScanner.warmUp(ctx) }
+                }
+            }
             SectionHeader("Scanning")
             Card(Modifier.rise(intro, 1)) {
                 Text("Default look", style = MaterialTheme.typography.titleSmall)
@@ -84,6 +109,15 @@ fun SettingsScreen(nav: Nav) {
                     PageSize.entries.forEach { p -> WizChip(p.label, page == p, { page = p; Prefs.setPageSize(ctx, p) }) }
                 }
             }
+            SectionHeader("OCR languages")
+            Card(Modifier.rise(intro, 3)) {
+                OcrLanguagePicker(langs) { langs = it; Prefs.setOcrLangs(ctx, it); Prefs.setOcrLangsAsked(ctx) }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Each page is read in English and in the scripts ticked here; the clearest reading is kept. More scripts make saving a little slower.",
+                    style = MaterialTheme.typography.bodySmall, color = WizMuted
+                )
+            }
             SectionHeader("Reading")
             Card(Modifier.rise(intro, 3)) {
                 ToggleRow("Night reading", "Dark pages with light text, easier on the eyes at night", night) { night = it; Prefs.setNightReading(ctx, it) }
@@ -94,6 +128,7 @@ fun SettingsScreen(nav: Nav) {
                 Spacer(Modifier.height(4.dp))
                 Text(
                     "Wiz PDF Master has no internet permission. Scanning, text recognition and PDF creation all run on your device. " +
+                        "The Smart scanner, extra OCR languages and QR reading are on-device components of Google Play services. " +
                         "No accounts, no ads, no tracking. ${docs.size} document${if (docs.size == 1) "" else "s"} stored privately in the app.",
                     style = MaterialTheme.typography.bodySmall, color = WizMuted
                 )
@@ -111,7 +146,7 @@ fun SettingsScreen(nav: Nav) {
                 Text("by Wiz Labs", style = MaterialTheme.typography.bodySmall, color = WizMuted)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Open-source engines: OpenCV (Apache 2.0), PDFBox-Android (Apache 2.0), Google ML Kit on-device text recognition, AndroidX CameraX.",
+                    "Open-source engines: OpenCV (Apache 2.0), PDFBox-Android (Apache 2.0), Google ML Kit on-device text recognition, document scanner and barcode reading, AndroidX CameraX.",
                     style = MaterialTheme.typography.bodySmall, color = WizMuted
                 )
             }

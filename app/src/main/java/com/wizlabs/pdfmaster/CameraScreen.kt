@@ -370,6 +370,7 @@ private fun CameraContent(nav: Nav) {
                 if (ScanSession.pages.isEmpty()) {
                     WizChip("Document", !idMode, { ScanSession.idCard.value = false })
                     WizChip("ID card", idMode, { ScanSession.idCard.value = true })
+                    WizChip("QR scan", false, { nav.replace(Screen.Qr) })
                 } else {
                     val side = ScanSession.pages.size % IdCardLayout.PER_SHEET
                     Text(

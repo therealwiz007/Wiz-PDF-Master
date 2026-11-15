@@ -1,5 +1,5 @@
 <resources>
     <string name="app_name">Wiz PDF Master</string>
     <string name="whats_new_title">What\'s new in %1$s</string>
-    <string name="whats_new_body">• Sharper scans: exact corners, straightened text, cleaner black &amp; white\n• Auto look picks colour, gray or black &amp; white for each page\n• ID card mode: both sides on one page at real size\n• PDF to JPG, and share a page as a picture\n• Add or remove a PDF password\n• Unfinished scans are kept until you save them</string>
+    <string name="whats_new_body">• Smart scanner: Google\'s scanner for the photos, your own looks and saving afterwards (switch in Settings)\n• Text recognition for Hindi, Chinese, Japanese and Korean\n• Annotate: highlight, draw and add notes\n• Watermark and page numbers\n• Fill in PDF forms\n• QR and barcode scanner\n• Rename several scans at once: long-press one to start</string>
 </resources>

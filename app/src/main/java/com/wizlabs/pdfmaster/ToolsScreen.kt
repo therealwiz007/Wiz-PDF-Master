@@ -36,6 +36,11 @@ import androidx.compose.material.icons.automirrored.outlined.CallSplit
 import androidx.compose.material.icons.automirrored.outlined.MergeType
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Compress
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.FormatListNumbered
+import androidx.compose.material.icons.outlined.QrCodeScanner
+import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Image
@@ -106,9 +111,9 @@ fun ToolsScreen(nav: Nav) {
     val scope = rememberCoroutineScope()
     var pickFor by remember { mutableStateOf<((PdfRef) -> Screen)?>(null) }
     var importing by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    val starter = rememberScanStarter(nav)
     val pickImages = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(50)) { uris ->
         if (uris.isNotEmpty()) scope.launch {
-            ScanSession.clear(ctx)
             importing = 0 to uris.size
             importImages(ctx, uris) { done -> importing = done to uris.size }
             importing = null
@@ -131,16 +136,27 @@ fun ToolsScreen(nav: Nav) {
             SlimTile(Icons.Outlined.Compress, "Compress PDF", "Shrink to a size you choose",
                 onClick = { pickFor = { Screen.Compress(it) } })
             SlimTile(Icons.Outlined.PhotoLibrary, "Images to PDF", "Pick photos, arrange them, save",
-                onClick = { pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
+                onClick = { starter.fresh { pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } })
             SlimTile(Icons.Outlined.Image, "PDF to JPG", "Save pages as pictures, or share them",
                 onClick = { pickFor = { Screen.ToJpg(it) } })
             SlimTile(Icons.Outlined.Lock, "Password", "Lock a PDF, or remove its password",
                 onClick = { pickFor = { Screen.Protect(it) } })
             SlimTile(Icons.Outlined.Badge, "Scan ID card", "Front and back on one page, real size",
-                onClick = { ScanSession.clear(ctx); ScanSession.idCard.value = true; nav.push(Screen.Camera) })
+                onClick = { starter.scan(idCard = true) })
+            SlimTile(Icons.Outlined.Edit, "Annotate", "Highlight, draw and add notes",
+                onClick = { pickFor = { Screen.Annotate(it) } })
+            SlimTile(Icons.Outlined.WaterDrop, "Watermark", "Text or a picture across every page",
+                onClick = { pickFor = { Screen.Stamp(it) } })
+            SlimTile(Icons.Outlined.FormatListNumbered, "Page numbers", "Position, format and start number",
+                onClick = { pickFor = { Screen.Stamp(it, numbers = true) } })
+            SlimTile(Icons.Outlined.EditNote, "Fill a form", "Type into PDF form fields",
+                onClick = { pickFor = { Screen.Form(it) } })
+            SlimTile(Icons.Outlined.QrCodeScanner, "Scan QR or barcode", "Links, Wi-Fi, contacts and more",
+                onClick = { nav.push(Screen.Qr) })
         }
     }
 
+    ScanStarterUi(starter)
     pickFor?.let { target ->
         PickDocDialog(onDismiss = { pickFor = null }) { ref -> pickFor = null; nav.push(target(ref)) }
     }

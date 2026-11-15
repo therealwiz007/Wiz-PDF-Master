@@ -137,6 +137,13 @@ object Library {
         save()
     }
 
+    /** Rename several documents at once ([names]: document id to new name). */
+    fun renameAll(names: Map<String, String>) {
+        val now = System.currentTimeMillis()
+        _docs.value = _docs.value.map { d -> names[d.id]?.takeIf { it.isNotBlank() && it != d.name }?.let { d.copy(name = it, modified = now) } ?: d }
+        save()
+    }
+
     fun doc(id: String) = _docs.value.firstOrNull { it.id == id }
 
     fun thumbnail(ctx: Context, id: String): Bitmap? {
@@ -205,6 +212,22 @@ object Prefs {
     /** Last app version that ran on this phone (0 before 1.3.0), for the one-time "What's new". */
     fun lastSeenVersion(ctx: Context) = sp(ctx).getInt("seen_v", 0)
     fun setLastSeenVersion(ctx: Context, v: Int) = sp(ctx).edit().putInt("seen_v", v).apply()
+
+    /** Which scanner "Scan" opens; null until the user chooses (then: Google's when the phone has it). */
+    fun scanner(ctx: Context): ScannerKind? = ScannerChoice.decode(sp(ctx).getString("scanner", null))
+    fun setScanner(ctx: Context, k: ScannerKind) = sp(ctx).edit().putString("scanner", k.name).apply()
+
+    /** Google scanner with its extra clean-up tools (stain and finger removal). */
+    fun scannerCleanup(ctx: Context) = sp(ctx).getBoolean("scanner_full", false)
+    fun setScannerCleanup(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("scanner_full", v).apply()
+
+    /** Scripts text recognition reads; Latin is always among them. */
+    fun ocrLangs(ctx: Context): Set<OcrLang> = OcrLangs.decode(sp(ctx).getString("ocr_langs", null))
+    fun setOcrLangs(ctx: Context, v: Set<OcrLang>) = sp(ctx).edit().putString("ocr_langs", OcrLangs.encode(v)).apply()
+
+    /** The one-time "Which languages do you scan?" question has been answered. */
+    fun ocrLangsAsked(ctx: Context) = sp(ctx).getBoolean("ocr_langs_asked", false)
+    fun setOcrLangsAsked(ctx: Context) = sp(ctx).edit().putBoolean("ocr_langs_asked", true).apply()
 
     fun lastPage(ctx: Context, key: String) = sp(ctx).getInt("lp_" + key.hashCode(), 0)
     fun setLastPage(ctx: Context, key: String, page: Int) = sp(ctx).edit().putInt("lp_" + key.hashCode(), page).apply()

@@ -2,6 +2,10 @@
 
 package com.wizlabs.pdfmaster
 
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.FormatListNumbered
+import androidx.compose.material.icons.outlined.WaterDrop
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -419,6 +423,18 @@ private fun ViewerContent(nav: Nav, src: PdfSource, startSigning: Boolean = fals
                                     textSheet = TextSheetState(visiblePage)
                                 }
                                 MenuItem("Go to page", Icons.Outlined.ShortText) { menu = false; showGoTo = true }
+                                MenuItem("Annotate", Icons.Outlined.Edit) {
+                                    menu = false; nav.push(Screen.Annotate(src.ref, src.password, visiblePage))
+                                }
+                                MenuItem("Watermark", Icons.Outlined.WaterDrop) {
+                                    menu = false; nav.push(Screen.Stamp(src.ref, src.password))
+                                }
+                                MenuItem("Page numbers", Icons.Outlined.FormatListNumbered) {
+                                    menu = false; nav.push(Screen.Stamp(src.ref, src.password, numbers = true))
+                                }
+                                MenuItem("Fill form", Icons.Outlined.EditNote) {
+                                    menu = false; nav.push(Screen.Form(src.ref, src.password))
+                                }
                                 MenuItem("Edit pages", Icons.Outlined.GridView) {
                                     menu = false; nav.push(Screen.Pages(src.ref, src.password))
                                 }
@@ -991,7 +1007,7 @@ private fun TextSheet(src: PdfSource, page: Int, onDismiss: () -> Unit) {
         viaOcr = true
         val bmp = src.renderFresh(page, 2000)
         if (bmp == null) { failed = true; return@LaunchedEffect }
-        val r = runCatching { Ocr.recognize(bmp) }.getOrNull()
+        val r = runCatching { Ocr.recognize(bmp, langs = Prefs.ocrLangs(ctx)) }.getOrNull()
         bmp.recycle()
         if (r == null) failed = true else text = r.text.ifBlank { "" }
     }

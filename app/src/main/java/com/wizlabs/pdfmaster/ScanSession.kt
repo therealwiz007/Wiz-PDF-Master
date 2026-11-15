@@ -26,7 +26,8 @@ data class ScanPage(
     val version: Int = 0,           // bumps on every edit so previews refresh
     val skew: Float = 0f,           // clockwise tilt of the text in degrees, levelled out in the warp
     val autoPick: ScanFilter? = null,   // what "Auto" chose for this page
-    val card: Boolean = false       // an ID card: forced to card proportions
+    val card: Boolean = false,      // an ID card: forced to card proportions
+    val curve: Boolean = false      // beta: straighten the lines of a bulging (book) page
 ) {
     /** The look actually applied; null while "Auto" has not looked at the page yet. */
     val look: ScanFilter? get() = if (filter == ScanFilter.AUTO) autoPick else filter
@@ -120,7 +121,7 @@ object ScanSession {
             val mine = list.filter { it.original.parentFile == d }
             if (mine.isEmpty()) return@runCatching
             val text = DraftCodec.encode(Draft(card, sel.coerceIn(0, mine.lastIndex), mine.map {
-                DraftPage(it.id, it.original.name, it.quad, it.rotation, it.filter.name, it.blurry, it.skew, it.autoPick?.name, it.card)
+                DraftPage(it.id, it.original.name, it.quad, it.rotation, it.filter.name, it.blurry, it.skew, it.autoPick?.name, it.card, it.curve)
             }))
             val tmp = File(d, "$DRAFT_FILE.tmp")
             tmp.writeText(text)
@@ -141,7 +142,7 @@ object ScanSession {
                 filter = runCatching { ScanFilter.valueOf(p.filter) }.getOrDefault(ScanFilter.MAGIC),
                 blurry = p.blurry, skew = p.skew,
                 autoPick = p.autoPick?.let { runCatching { ScanFilter.valueOf(it) }.getOrNull() },
-                card = p.card
+                card = p.card, curve = p.curve
             )
         }
         if (restored.isEmpty()) { clear(ctx); return false }
@@ -241,7 +242,10 @@ object ScanSession {
         }
         val rotated = ScanEngine.rotate(warped, page.rotation)
         if (rotated !== warped) warped.recycle()
-        return rotated
+        if (!page.curve) return rotated
+        val flat = CurveFlatten.flatten(page, rotated)
+        if (flat !== rotated) rotated.recycle()
+        return flat
     }
 
     /** Original photo at preview size, for the crop screen. */

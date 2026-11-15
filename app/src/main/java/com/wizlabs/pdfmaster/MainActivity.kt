@@ -53,6 +53,19 @@ sealed interface Screen {
     data class Protect(val ref: PdfRef, val password: String? = null) : Screen {
         override fun toString() = "Protect(${ref.key})"
     }
+    /** Highlight, draw and write notes on the pages; starts on [page]. */
+    data class Annotate(val ref: PdfRef, val password: String? = null, val page: Int = 0) : Screen {
+        override fun toString() = "Annotate(${ref.key})"
+    }
+    /** Watermark, or page numbers when [numbers] is set. */
+    data class Stamp(val ref: PdfRef, val password: String? = null, val numbers: Boolean = false) : Screen {
+        override fun toString() = "Stamp(${ref.key}, $numbers)"
+    }
+    /** Fill in the form fields of a PDF. */
+    data class Form(val ref: PdfRef, val password: String? = null) : Screen {
+        override fun toString() = "Form(${ref.key})"
+    }
+    data object Qr : Screen
 }
 
 class Nav {
@@ -156,7 +169,7 @@ fun AppRoot(nav: Nav) {
             label = "nav"
         ) { screen ->
           // Camera preview is a SurfaceView, which ignores layer transforms: no peek there.
-          Box(if (screen == Screen.Camera) Modifier.fillMaxSize() else Modifier.fillMaxSize().backPeek(screen.toString())) {
+          Box(if (screen == Screen.Camera || screen == Screen.Qr) Modifier.fillMaxSize() else Modifier.fillMaxSize().backPeek(screen.toString())) {
             when (screen) {
                 Screen.Home -> HomeScreen(nav)
                 Screen.Camera -> CameraScreen(nav)
@@ -170,6 +183,10 @@ fun AppRoot(nav: Nav) {
                 is Screen.Compress -> CompressScreen(nav, screen.ref, screen.password)
                 is Screen.ToJpg -> PdfToJpgScreen(nav, screen.ref, screen.password, screen.page)
                 is Screen.Protect -> ProtectScreen(nav, screen.ref, screen.password)
+                is Screen.Annotate -> AnnotateScreen(nav, screen.ref, screen.password, screen.page)
+                is Screen.Stamp -> StampScreen(nav, screen.ref, screen.password, screen.numbers)
+                is Screen.Form -> FormScreen(nav, screen.ref, screen.password)
+                Screen.Qr -> QrScreen(nav)
             }
           }
         }
