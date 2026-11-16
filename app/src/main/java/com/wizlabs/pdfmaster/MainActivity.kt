@@ -94,6 +94,16 @@ class MainActivity : ComponentActivity() {
         setContent { WizTheme { AppRoot(nav) } }
     }
 
+    override fun onStart() {
+        super.onStart()
+        com.wizlabs.ads.WizAds.onActivityStart(this)   // session count only; no SDK in this build
+    }
+
+    override fun onStop() {
+        com.wizlabs.ads.WizAds.onActivityStop()
+        super.onStop()
+    }
+
     override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
         if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN) MotionIdle.onTouch()
         return super.dispatchTouchEvent(ev)
@@ -150,6 +160,8 @@ fun AppRoot(nav: Nav) {
     val peek = remember { BackPeek() }
     // Once the back transition has played, drop the peek so the next visit starts full size.
     LaunchedEffect(nav.current) { kotlinx.coroutines.delay(650); if (!peek.dragging) peek.reset() }
+    // Tell the ads gate where we are, so slots know if they may appear (plan 3.4).
+    LaunchedEffect(nav.current) { com.wizlabs.ads.WizAds.onScreen(AdsSetup.nameOf(nav.current)) }
     CompositionLocalProvider(LocalBackPeek provides peek) {
     WizBackHandler(nav.current.toString(), enabled = nav.stack.size > 1) { nav.pop() }
     // Surface sets the default text/icon colour for every screen (otherwise plain Text is black).
@@ -190,6 +202,8 @@ fun AppRoot(nav: Nav) {
             }
           }
         }
+        // On top of every screen: after 3 days of being offered, a Play update becomes required.
+        RequiredUpdateGate()
     }
     }
 }

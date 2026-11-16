@@ -175,7 +175,7 @@ fun HomeScreen(nav: Nav) {
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text("Wiz PDF Master", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Text("Scan · Read · Sign  —  100% offline", style = MaterialTheme.typography.bodySmall, color = WizMuted)
+                        Text("Scan · Read · Sign  —  stays on your phone", style = MaterialTheme.typography.bodySmall, color = WizMuted)
                     }
                     IconButton(onClick = { nav.push(Screen.Settings) }) {
                         Icon(Icons.Outlined.Settings, "Settings", tint = WizText)
@@ -286,6 +286,10 @@ fun HomeScreen(nav: Nav) {
                         onCompress = { nav.push(Screen.Compress(PdfRef.Local(d.id, d.name))) },
                         onDelete = { deleteDoc = d }
                     )
+                    // Ad slot (plan 3.10): after the 3rd document, only with 3+ documents, never while
+                    // the update card shows or a search is on. Renders nothing while ads are off.
+                    if (i == AdsSetup.NATIVE_AFTER_ROW - 1 && shownDocs.size >= AdsSetup.NATIVE_MIN_DOCS && !updateCard && q.isEmpty())
+                        com.wizlabs.ads.compose.WizNativeAdCard(AdsSetup.HOME, AdsSetup.palette, Modifier.padding(vertical = 4.dp))
                 }
             } else {
                 if (shownRecents.isEmpty()) item(key = "empty-recents") {

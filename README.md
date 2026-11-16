@@ -1,6 +1,6 @@
 # Wiz PDF Master
 
-**Scan · Sign · Read — 100% offline.** A Wiz Labs app that combines a document scanner, a PDF signer, a fast PDF reader and on-device text recognition (OCR) in one app. No internet permission, no accounts, no ads.
+**Scan · Sign · Read — your documents stay on your phone.** A Wiz Labs app that combines a document scanner, a PDF signer, a fast PDF reader and on-device text recognition (OCR) in one app. No accounts; nothing you scan is uploaded.
 
 - Package: `com.wizlabs.pdfmaster` · Launcher name: **PDF Master** · min Android 8.0 (API 26), target API 36
 - Kotlin + Jetpack Compose, Wiz black-and-yellow look

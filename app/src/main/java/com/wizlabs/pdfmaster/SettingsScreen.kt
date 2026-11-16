@@ -124,12 +124,12 @@ fun SettingsScreen(nav: Nav) {
             }
             SectionHeader("Privacy")
             Card(Modifier.rise(intro, 4)) {
-                Text("Everything stays on this phone", style = MaterialTheme.typography.titleSmall)
+                Text("Your documents stay on this phone", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Wiz PDF Master has no internet permission. Scanning, text recognition and PDF creation all run on your device. " +
+                    "Scanning, text recognition and PDF creation all run on your device; nothing you scan, sign or open is uploaded. " +
                         "The Smart scanner, extra OCR languages and QR reading are on-device components of Google Play services. " +
-                        "No accounts, no ads, no tracking. ${docs.size} document${if (docs.size == 1) "" else "s"} stored privately in the app.",
+                        "No account needed. ${docs.size} document${if (docs.size == 1) "" else "s"} stored privately in the app.",
                     style = MaterialTheme.typography.bodySmall, color = WizMuted
                 )
                 Spacer(Modifier.height(10.dp))

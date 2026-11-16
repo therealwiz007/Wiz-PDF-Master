@@ -1,10 +1,8 @@
-New: pro tools and a smarter scanner
-• Smart scanner: Google's scanner takes the photos, then your own looks, text and saving (choose in Settings)
-• Text recognition for Hindi, Chinese, Japanese and Korean
-• Annotate: highlight, draw and add notes
-• Watermark and page numbers
-• Fill in PDF forms
-• QR and barcode scanner
-• Rename several scans at once
-• Flatten curved book pages (Beta)
-• Starting a new scan now asks before dropping an unfinished one
+Big update
+• PDF tools: reorder, rotate, delete and extract pages, merge, split, compress to a size you choose
+• Images to PDF, PDF to JPG, add or remove a password
+• Annotate, watermark, page numbers, fill forms
+• Sharper scans: better edges, shadow removal, auto filter, auto-rotate, ID card mode
+• Smart scanner, Hindi/Chinese/Japanese/Korean text, QR scanner
+• Unfinished scans are saved
+• Update alerts inside the app

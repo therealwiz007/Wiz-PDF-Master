@@ -142,11 +142,22 @@ class PageLogicTest {
 
     // ---- Update prompt
 
-    @Test fun snoozeLastsThreeDaysPerVersion() {
+    @Test fun updateIsOfferedThreeDaysThenRequired() {
         val day = 24L * 60 * 60 * 1000
-        assertTrue(UpdateLogic.snoozed(9, 9, 1000, 1000 + 2 * day))
-        assertFalse(UpdateLogic.snoozed(9, 9, 1000, 1000 + 3 * day))
-        assertFalse("a newer version shows again", UpdateLogic.snoozed(10, 9, 1000, 2000))
+        val seen = 10 * day
+        assertEquals(0, UpdateLogic.ageDays(null, seen, seen))
+        assertFalse(UpdateLogic.mustUpdate(UpdateLogic.ageDays(null, seen, seen + 2 * day)))
+        assertEquals(1, UpdateLogic.daysLeft(UpdateLogic.ageDays(null, seen, seen + 2 * day)))
+        assertTrue(UpdateLogic.mustUpdate(UpdateLogic.ageDays(null, seen, seen + 3 * day)))
+        assertTrue("Play's own count wins when larger", UpdateLogic.mustUpdate(UpdateLogic.ageDays(4, seen, seen)))
+        assertEquals(0, UpdateLogic.ageDays(null, 0, seen))                       // never seen
+        assertEquals(0, UpdateLogic.ageDays(null, seen + day, seen))             // clock moved back
+    }
+
+    @Test fun firstSightingIsKeptPerVersion() {
+        assertEquals(9 to 1000L, UpdateLogic.firstSeen(9, 9, 1000, 5000))
+        assertEquals("a newer version starts its own grace", 10 to 5000L, UpdateLogic.firstSeen(10, 9, 1000, 5000))
+        assertEquals(9 to 5000L, UpdateLogic.firstSeen(9, 0, 0, 5000))
     }
 
     @Test fun whatsNewOnlyAfterRealUpdate() {

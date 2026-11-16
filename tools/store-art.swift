@@ -124,7 +124,7 @@ func icons(_ out: String) {
         text("Wiz PDF Master", 360, 120, size: 64, weight: .heavy, color: .white)
         text("SCAN · SIGN · READ", 362, 210, size: 27, weight: .bold, color: yellow, kern: 2)
         text("Scanner, PDF signature, reader and OCR", 362, 262, size: 23, weight: .regular, color: NSColor(white: 0.92, alpha: 1))
-        text("100% offline  •  No ads  •  No account", 362, 298, size: 23, weight: .regular, color: NSColor(white: 0.92, alpha: 1))
+        text("Stays on your phone  •  No account", 362, 298, size: 23, weight: .regular, color: NSColor(white: 0.92, alpha: 1))
         let pill = NSBezierPath(roundedRect: rect(362, 358, 230, 52), xRadius: 26, yRadius: 26)
         yellow.setFill(); pill.fill()
         text("BY WIZ LABS", 362, 368, size: 24, weight: .heavy, color: ink, width: 230, align: .center, kern: 1.5)

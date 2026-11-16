@@ -153,6 +153,8 @@ fun ToolsScreen(nav: Nav) {
                 onClick = { pickFor = { Screen.Form(it) } })
             SlimTile(Icons.Outlined.QrCodeScanner, "Scan QR or barcode", "Links, Wi-Fi, contacts and more",
                 onClick = { nav.push(Screen.Qr) })
+            // Ad slot (plan 3.10): inline banner at the bottom of the hub. Renders nothing while ads are off.
+            com.wizlabs.ads.compose.WizBannerAd(AdsSetup.TOOLS, inline = true)
         }
     }
 

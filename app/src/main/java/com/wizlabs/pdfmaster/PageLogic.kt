@@ -218,11 +218,28 @@ object Bilevel {
 // ---- Update prompt -------------------------------------------------------------------------------
 
 object UpdateLogic {
-    const val SNOOZE_MS = 3L * 24 * 60 * 60 * 1000
+    /** Days a new Play version is offered with a dismissible card before it becomes required. */
+    const val GRACE_DAYS = 3
+    private const val DAY_MS = 24L * 60 * 60 * 1000
 
-    /** The "update available" card stays hidden for three days after ✕, per offered version. */
-    fun snoozed(offeredVersion: Int, snoozedVersion: Int, snoozedAt: Long, now: Long): Boolean =
-        offeredVersion == snoozedVersion && now - snoozedAt in 0 until SNOOZE_MS
+    /**
+     * How old the offered update is, in days: the larger of what Play reports
+     * (`clientVersionStalenessDays`, null when unknown) and how long ago this app first saw it.
+     */
+    fun ageDays(playStalenessDays: Int?, firstSeenAt: Long, now: Long): Int {
+        val ours = if (firstSeenAt in 1..now) ((now - firstSeenAt) / DAY_MS).toInt() else 0
+        return maxOf(playStalenessDays ?: 0, ours)
+    }
+
+    /** After the grace the update is required: the app blocks until it is installed. */
+    fun mustUpdate(ageDays: Int): Boolean = ageDays >= GRACE_DAYS
+
+    /** Whole days left before the update is required (shown on the card). */
+    fun daysLeft(ageDays: Int): Int = (GRACE_DAYS - ageDays).coerceAtLeast(0)
+
+    /** The first sighting of a version is kept; a newer offered version starts its own grace. */
+    fun firstSeen(offered: Int, storedVersion: Int, storedAt: Long, now: Long): Pair<Int, Long> =
+        if (offered == storedVersion && storedAt > 0) storedVersion to storedAt else offered to now
 
     /**
      * Show "What's new" once after an update. [lastSeen] is 0 for installs that predate the
