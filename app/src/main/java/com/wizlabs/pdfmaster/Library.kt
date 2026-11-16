@@ -206,10 +206,6 @@ object Prefs {
     fun nightReading(ctx: Context) = sp(ctx).getBoolean("night", false)
     fun setNightReading(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("night", v).apply()
 
-    /** Newest Play version this phone has been offered, and when the app first saw it (for the 3-day grace). */
-    fun updateFirstSeen(ctx: Context): Pair<Int, Long> = sp(ctx).getInt("upd_v", 0) to sp(ctx).getLong("upd_t", 0L)
-    fun setUpdateFirstSeen(ctx: Context, version: Int, at: Long) = sp(ctx).edit().putInt("upd_v", version).putLong("upd_t", at).apply()
-
     /** Last app version that ran on this phone (0 before 1.3.0), for the one-time "What's new". */
     fun lastSeenVersion(ctx: Context) = sp(ctx).getInt("seen_v", 0)
     fun setLastSeenVersion(ctx: Context, v: Int) = sp(ctx).edit().putInt("seen_v", v).apply()

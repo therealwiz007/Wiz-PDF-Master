@@ -202,8 +202,6 @@ fun AppRoot(nav: Nav) {
             }
           }
         }
-        // On top of every screen: after 3 days of being offered, a Play update becomes required.
-        RequiredUpdateGate()
     }
     }
 }
