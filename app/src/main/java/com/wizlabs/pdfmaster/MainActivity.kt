@@ -125,6 +125,7 @@ class MainActivity : ComponentActivity() {
             }
             else -> null
         } ?: return
+        if (DefaultPdfApp.isSample(uri)) return      // our own "set as default" sample: the Home card confirms
         openExternal(this, nav, uri)
     }
 

@@ -206,6 +206,10 @@ object Prefs {
     fun nightReading(ctx: Context) = sp(ctx).getBoolean("night", false)
     fun setNightReading(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("night", v).apply()
 
+    /** Installed version for which "Open PDFs with Wiz PDF Master?" was dismissed (0 = never). */
+    fun defaultCardDismissed(ctx: Context) = sp(ctx).getInt("dflt_v", 0)
+    fun setDefaultCardDismissed(ctx: Context, v: Int) = sp(ctx).edit().putInt("dflt_v", v).apply()
+
     /** Last app version that ran on this phone (0 before 1.3.0), for the one-time "What's new". */
     fun lastSeenVersion(ctx: Context) = sp(ctx).getInt("seen_v", 0)
     fun setLastSeenVersion(ctx: Context, v: Int) = sp(ctx).edit().putInt("seen_v", v).apply()

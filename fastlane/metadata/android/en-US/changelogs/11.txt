@@ -1,0 +1,2 @@
+• If your phone forgets that PDFs open in Wiz PDF Master after an update, a small card on Home helps you set it again (tap Set, then Always)
+• Small fixes

@@ -120,6 +120,7 @@ fun HomeScreen(nav: Nav) {
     val listState = rememberLazyListState()
     val intro = rememberIntro()
     var updateCard by remember { mutableStateOf(false) }
+    var defaultCard by remember { mutableStateOf(false) }
     val starter = rememberScanStarter(nav)
     // Batch rename: long-press a scan to start picking several.
     var picked by remember { mutableStateOf(setOf<String>()) }
@@ -288,7 +289,7 @@ fun HomeScreen(nav: Nav) {
                     )
                     // Ad slot (plan 3.10): after the 3rd document, only with 3+ documents, never while
                     // the update card shows or a search is on. Renders nothing while ads are off.
-                    if (i == AdsSetup.NATIVE_AFTER_ROW - 1 && shownDocs.size >= AdsSetup.NATIVE_MIN_DOCS && !updateCard && q.isEmpty())
+                    if (i == AdsSetup.NATIVE_AFTER_ROW - 1 && shownDocs.size >= AdsSetup.NATIVE_MIN_DOCS && !updateCard && !defaultCard && q.isEmpty())
                         com.wizlabs.ads.compose.WizNativeAdCard(AdsSetup.HOME, AdsSetup.palette, Modifier.padding(vertical = 4.dp))
                 }
             } else {
@@ -319,7 +320,7 @@ fun HomeScreen(nav: Nav) {
             visible = showFab && picked.isEmpty(),
             enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut(),
             modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(20.dp)
-                .padding(bottom = if (updateCard) 64.dp else 0.dp)
+                .padding(bottom = if (updateCard || defaultCard) 64.dp else 0.dp)
         ) {
             ExtendedFloatingActionButton(
                 onClick = { starter.scan() },
@@ -350,6 +351,12 @@ fun HomeScreen(nav: Nav) {
         UpdateCard(
             Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal = 14.dp, vertical = 10.dp),
             onVisible = { updateCard = it }
+        )
+        // One card at a time: the update card wins; this one asks to be the PDF app (once per version).
+        DefaultAppCard(
+            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal = 14.dp, vertical = 10.dp),
+            hidden = updateCard || picked.isNotEmpty(),
+            onVisible = { defaultCard = it }
         )
     }
     WhatsNewSheet()
