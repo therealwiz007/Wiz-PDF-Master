@@ -28,6 +28,13 @@ Wiz PDF Master is a PDF scanner, PDF signer and PDF reader in one app. Scan docu
 • Scanned PDFs become searchable with an invisible text layer
 • Extract text from any page of any PDF, then copy or share it
 
+🛠 PDF TOOLS (NEW)
+• Organise pages: reorder, rotate, delete and extract
+• Merge, split and compress PDFs to a size you choose
+• Images to PDF, PDF to JPG, add or remove a password
+• Annotate, watermark, page numbers and fill forms
+• QR and barcode scanner
+
 📖 PDF READER AND VIEWER
 • Open any PDF from your phone, WhatsApp, Gmail, Drive or a file manager
 • Smooth scrolling, pinch-zoom and double-tap zoom with sharp re-rendering
